@@ -6,8 +6,9 @@ import torch.utils.data
 import numpy as np
 import pyvista as pv
 
+
 class SinglePersonDataset(torch.utils.data.Dataset):
-    def __init__(self, root_path: Path, person_name: str, num_additional_frames: int=0):
+    def __init__(self, root_path: Path, person_name: str, num_additional_frames: int = 0):
         super().__init__()
         self.root_path = root_path
         self.person_name = person_name
@@ -22,7 +23,7 @@ class SinglePersonDataset(torch.utils.data.Dataset):
         paths = list(zip(pointcloud_paths, label_paths))
         paths = self.insert_additional_paths(paths)
         return paths
-    
+
     def pointcloud_path_from_label_path(self, label_path: Path) -> Path:
         pointcloud_path = self.pointclouds_clips_path / label_path.relative_to(self.labels_clips_path)
         pointcloud_path = pointcloud_path.with_stem(pointcloud_path.stem.rstrip("_emotion")).with_suffix(".vtk")
@@ -47,8 +48,11 @@ class SinglePersonDataset(torch.utils.data.Dataset):
         poly = (poly - poly.min()) / (poly.max() - poly.min()) - 0.5
         return poly
 
+
 def make_dataset(root_path: Path, people_names: List[str]) -> torch.utils.data.Dataset:
-    return torch.utils.data.ConcatDataset([
-        SinglePersonDataset(root_path, person_name=person_name)
-        for person_name in people_names
-    ])
+    return torch.utils.data.ConcatDataset(
+        [
+            SinglePersonDataset(root_path, person_name=person_name)
+            for person_name in people_names
+        ]
+    )

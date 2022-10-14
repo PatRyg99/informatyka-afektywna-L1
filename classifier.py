@@ -86,7 +86,6 @@ class PointNetClassifier(pl.LightningModule):
         return optimizer
 
     def shared_step(self, batch):
-
         pointclouds, labels = batch
         preds = self.forward(pointclouds.float())
 

@@ -1,6 +1,5 @@
 from pathlib import Path
 from typing import Optional
-from matplotlib import image
 import numpy as np
 import pyvista as pv
 import mediapipe as mp
@@ -17,12 +16,13 @@ def main():
 
     args = [
         (
-            image_path, 
+            image_path,
             pointclouds_root_path / image_path.relative_to(images_root_path).with_suffix(".vtk"),
             preview_root_path / image_path.relative_to(images_root_path),
         ) for image_path in paths
     ]
     pqdm(args, save_face_mesh, argument_type="args", n_jobs=8)
+
 
 def save_face_mesh(face_path: Path, output_path: Path, preview_export_path: Optional[Path]) -> None:
     output_path.parent.mkdir(exist_ok=True, parents=True)
@@ -30,12 +30,13 @@ def save_face_mesh(face_path: Path, output_path: Path, preview_export_path: Opti
     mesh: pv.PolyData = face_to_mesh(face_img=face_img, preview_export_path=preview_export_path)
     mesh.save(output_path)
 
+
 def face_to_mesh(face_img: np.ndarray, preview_export_path: Optional[Path]) -> pv.PolyData:
     with mp.solutions.face_mesh.FaceMesh(
-        static_image_mode=True,
-        max_num_faces=1,
-        refine_landmarks=True,
-        min_detection_confidence=0.5
+            static_image_mode=True,
+            max_num_faces=1,
+            refine_landmarks=True,
+            min_detection_confidence=0.5
     ) as face_mesh:
         results = face_mesh.process(cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB))
         if not results.multi_face_landmarks:
@@ -43,12 +44,15 @@ def face_to_mesh(face_img: np.ndarray, preview_export_path: Optional[Path]) -> p
         [face_landmarks] = results.multi_face_landmarks
         export_preview(face_landmarks, face_img=face_img, preview_export_path=preview_export_path)
 
-    nodes = np.stack([
-        [landmark.x, landmark.y, landmark.z]
-        for landmark in face_landmarks.landmark
-    ])
+    nodes = np.stack(
+        [
+            [landmark.x, landmark.y, landmark.z]
+            for landmark in face_landmarks.landmark
+        ]
+    )
     poly = pv.PolyData(nodes)
     return poly
+
 
 def export_preview(landmarks, face_img: np.ndarray, preview_export_path: Optional[Path]) -> None:
     if preview_export_path is None:

@@ -14,11 +14,10 @@ app = typer.Typer()
 
 @app.command()
 def train(
-    checkpoint_path: Path = typer.Option(".output/checkpoints", "-c", "--checkpoint_path"),
-    logs_path: Path = typer.Option(".output/logs", "-l", "--logs_path"),
+    checkpoint_path: Path = typer.Option("output/checkpoints", "-c", "--checkpoint_path"),
+    logs_path: Path = typer.Option("output/logs", "-l", "--logs_path"),
     auto_lr: bool = typer.Option(False, "-al", "--auto_lr"),
 ) -> Path:
-
     # initialise the LightningModule
     net = PointNetClassifier(Path(".data/"), 16, 0.001, 8)
 
