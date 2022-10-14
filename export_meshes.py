@@ -8,7 +8,7 @@ from pqdm.processes import pqdm
 
 
 def main():
-    data_path = Path("./.data")
+    data_path = Path("./data")
     images_root_path = data_path / "./image"
     pointclouds_root_path = data_path / "./pointcloud"
     preview_root_path = data_path / "./preview"

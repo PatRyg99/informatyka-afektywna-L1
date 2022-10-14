@@ -19,7 +19,7 @@ def train(
     auto_lr: bool = typer.Option(False, "-al", "--auto_lr"),
 ) -> Path:
     # initialise the LightningModule
-    net = PointNetClassifier(Path(".data/"), 16, 0.001, 8)
+    net = PointNetClassifier(Path("./data/"), 16, 0.001, 8)
 
     # set up loggers and checkpoints
     tb_logger = TensorBoardLogger(save_dir=str(logs_path))
@@ -41,7 +41,7 @@ def train(
         fig = lr_finder.plot(suggest=True)
         fig.suptitle(f"Suggested lr: {lr_finder.suggestion()}", fontsize=16)
 
-        lr_output_path = Path(".data/lr_finder/lr_plot.png")
+        lr_output_path = Path("./data/lr_finder/lr_plot.png")
         lr_output_path.parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(lr_output_path)
 
