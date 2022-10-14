@@ -1,17 +1,19 @@
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Callable
 
 import torch
+import torch.nn as nn
 import torch.utils.data
 import numpy as np
 import pyvista as pv
 
 
 class SinglePersonDataset(torch.utils.data.Dataset):
-    def __init__(self, root_path: Path, person_name: str, percentage_of_used_frames: float = 0.2, percentage_of_neutral_frames: float = 0.08):
+    def __init__(self, root_path: Path, person_name: str, transforms: Callable, percentage_of_used_frames: float = 0.2, percentage_of_neutral_frames: float = 0.08):
         super().__init__()
         self.root_path = root_path
         self.person_name = person_name
+        self.transforms = transforms or nn.Identity()
         self.percentage_of_used_frames = percentage_of_used_frames
         self.percentage_of_neutral_frames = percentage_of_neutral_frames
 
@@ -53,7 +55,7 @@ class SinglePersonDataset(torch.utils.data.Dataset):
         return [
             self.pointclouds_clips_path / clip_name / f"{self.person_name}_{clip_name}_{image_index:08d}.vtk"
             for image_index
-            in range(1, max_used_image_index+1)
+            in range(1, max_used_image_index + 1)
         ]
 
     def __len__(self):
@@ -70,13 +72,13 @@ class SinglePersonDataset(torch.utils.data.Dataset):
         poly_data: pv.PolyData = pv.read(str(pointcloud_path))
         poly: torch.Tensor = torch.from_numpy(poly_data.points)
         poly = (poly - poly.min()) / (poly.max() - poly.min()) - 0.5
-        return poly
+        return self.transforms(poly)
 
 
-def make_dataset(root_path: Path, people_names: List[str]) -> torch.utils.data.Dataset:
+def make_dataset(root_path: Path, people_names: List[str], transforms: Callable = None) -> torch.utils.data.Dataset:
     return torch.utils.data.ConcatDataset(
         [
-            SinglePersonDataset(root_path, person_name=person_name)
+            SinglePersonDataset(root_path, person_name=person_name, transforms=transforms)
             for person_name in people_names
         ]
     )
