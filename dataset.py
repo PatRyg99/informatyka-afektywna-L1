@@ -9,7 +9,7 @@ import pyvista as pv
 
 
 class SinglePersonDataset(torch.utils.data.Dataset):
-    def __init__(self, root_path: Path, person_name: str, transforms: Callable, percentage_of_used_frames: float = 0.2, percentage_of_neutral_frames: float = 0.08):
+    def __init__(self, root_path: Path, person_name: str, transforms: Callable, percentage_of_used_frames: float = 0.2, percentage_of_neutral_frames: float = 0.01):
         super().__init__()
         self.root_path = root_path
         self.person_name = person_name

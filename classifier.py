@@ -10,9 +10,11 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.nn import CrossEntropyLoss
 import torchmetrics
+from torchvision import transforms
 
 from dataset import make_dataset
 from model import PointNet
+from transforms import NormalRandomOffsetTransform, RandomRotation
 
 
 class PointNetClassifier(pl.LightningModule):
@@ -54,32 +56,31 @@ class PointNetClassifier(pl.LightningModule):
         return labels
 
     def prepare_data(self):
-        split_path = Path("split.json")
-
-        with split_path.open() as file:
+        with Path("split.json").open() as file:
             split_dict = json.load(file)
 
-        self.train_ds = make_dataset(root_path=self.dataset_path, people_names=split_dict["train"])
+        self.train_ds = make_dataset(
+            root_path=self.dataset_path,
+            people_names=split_dict["train"],
+            transforms=transforms.Compose([NormalRandomOffsetTransform(0.005), RandomRotation()])
+        )
         self.val_ds = make_dataset(root_path=self.dataset_path, people_names=split_dict["val"])
 
     def train_dataloader(self):
-        train_loader = DataLoader(
+        return DataLoader(
             self.train_ds,
             batch_size=self.bs,
             shuffle=True,
-            num_workers=3,
+            num_workers=8,
         )
 
-        return train_loader
-
     def val_dataloader(self):
-        val_loader = DataLoader(
+        return DataLoader(
             self.val_ds,
             batch_size=self.bs,
             shuffle=False,
-            num_workers=3,
+            num_workers=8,
         )
-        return val_loader
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.model.parameters(), self.lr)

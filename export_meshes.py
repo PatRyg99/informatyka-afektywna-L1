@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 import numpy as np
 import pyvista as pv
 import mediapipe as mp
@@ -27,11 +27,16 @@ def main():
 def save_face_mesh(face_path: Path, output_path: Path, preview_export_path: Optional[Path]) -> None:
     output_path.parent.mkdir(exist_ok=True, parents=True)
     face_img = cv2.imread(str(face_path))
-    mesh: pv.PolyData = face_to_mesh(face_img=face_img, preview_export_path=preview_export_path)
+    mesh, preview_img = face_to_mesh(face_img=face_img)
+
+    if preview_export_path:
+        preview_export_path.parent.mkdir(exist_ok=True, parents=True)
+        cv2.imwrite(str(preview_export_path), preview_img)
+
     mesh.save(output_path)
 
 
-def face_to_mesh(face_img: np.ndarray, preview_export_path: Optional[Path]) -> pv.PolyData:
+def face_to_mesh(face_img: np.ndarray) -> Tuple[pv.PolyData, np.ndarray]:
     with mp.solutions.face_mesh.FaceMesh(
             static_image_mode=True,
             max_num_faces=1,
@@ -41,9 +46,9 @@ def face_to_mesh(face_img: np.ndarray, preview_export_path: Optional[Path]) -> p
         results = face_mesh.process(cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB))
         if not results.multi_face_landmarks:
             print("no detection!")
+            raise NoFacesFoundException()
         [face_landmarks] = results.multi_face_landmarks
-        export_preview(face_landmarks, face_img=face_img, preview_export_path=preview_export_path)
-
+    preview: np.ndarray = generate_preview(landmarks=face_landmarks, face_img=face_img)
     nodes = np.stack(
         [
             [landmark.x, landmark.y, landmark.z]
@@ -51,13 +56,10 @@ def face_to_mesh(face_img: np.ndarray, preview_export_path: Optional[Path]) -> p
         ]
     )
     poly = pv.PolyData(nodes)
-    return poly
+    return poly, preview
 
 
-def export_preview(landmarks, face_img: np.ndarray, preview_export_path: Optional[Path]) -> None:
-    if preview_export_path is None:
-        return
-    preview_export_path.parent.mkdir(exist_ok=True, parents=True)
+def generate_preview(landmarks, face_img: np.ndarray) -> np.ndarray:
     annotated_image = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
     drawing_spec = mp.solutions.drawing_utils.DrawingSpec(thickness=1, circle_radius=1, color=(0, 0, 255))
     mp.solutions.drawing_utils.draw_landmarks(
@@ -67,7 +69,11 @@ def export_preview(landmarks, face_img: np.ndarray, preview_export_path: Optiona
         landmark_drawing_spec=drawing_spec,
         connection_drawing_spec=mp.solutions.drawing_styles.get_default_face_mesh_tesselation_style()
     )
-    cv2.imwrite(str(preview_export_path), annotated_image)
+    return annotated_image
+
+
+class NoFacesFoundException(Exception):
+    pass
 
 
 if __name__ == "__main__":
