@@ -20,7 +20,7 @@ emotion_map: dict[int, str] = {
 
 
 def main():
-    net = PointNetClassifier.load_from_checkpoint("output/checkpoints/last-v9.ckpt").eval()
+    net = PointNetClassifier.load_from_checkpoint("pretrained_models/sample_model_0.ckpt").eval()
     for frame in camera_frame_generator():
         process_frame(net, frame)
 
