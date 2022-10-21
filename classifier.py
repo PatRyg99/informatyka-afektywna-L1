@@ -13,7 +13,8 @@ import torchmetrics
 from torchvision import transforms
 
 from dataset import make_dataset
-from model import PointNet
+from models.dgcnn import DGCNN
+from models.pointnet import PointNet
 from transforms import NormalRandomOffsetTransform, RandomRotation
 
 
@@ -34,15 +35,21 @@ class PointNetClassifier(pl.LightningModule):
             num_classes=num_classes, average="macro"
         )
 
-        self.model = PointNet(
-            dim=3,
-            channels=(8, 16, 32, 64, 128, 256),
-            tnets=(True, True, False, False, False),
-            classes=num_classes,
-            stride=1,
-            main_kernel_size=1,
-            branch_kernel_sizes=(1, 3)
+        self.model = DGCNN(
+            channels=[3, 64, 128, 256],
+            head_channels=[256, 128],
+            num_classes=num_classes,
+            k=20
         )
+        # self.model = PointNet(
+        #     dim=3,
+        #     channels=(8, 16, 32, 64, 128, 256),
+        #     tnets=(True, True, False, False, False),
+        #     classes=num_classes,
+        #     stride=1,
+        #     main_kernel_size=1,
+        #     branch_kernel_sizes=(1, 3)
+        # )
 
     def forward(self, x):
         return self.model(x)
@@ -62,7 +69,7 @@ class PointNetClassifier(pl.LightningModule):
         self.train_ds = make_dataset(
             root_path=self.dataset_path,
             people_names=split_dict["train"],
-            transforms=transforms.Compose([NormalRandomOffsetTransform(0.005), RandomRotation()])
+            transforms=transforms.Compose([NormalRandomOffsetTransform(0.005)])
         )
         self.val_ds = make_dataset(root_path=self.dataset_path, people_names=split_dict["val"])
 
