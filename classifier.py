@@ -72,6 +72,7 @@ class PointNetClassifier(pl.LightningModule):
             batch_size=self.bs,
             shuffle=True,
             num_workers=8,
+            drop_last=True
         )
 
     def val_dataloader(self):
@@ -80,6 +81,7 @@ class PointNetClassifier(pl.LightningModule):
             batch_size=self.bs,
             shuffle=False,
             num_workers=8,
+            drop_last=True
         )
 
     def configure_optimizers(self):
