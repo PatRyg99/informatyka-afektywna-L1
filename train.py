@@ -1,4 +1,6 @@
+import os
 from pathlib import Path
+import datetime
 
 import matplotlib.pyplot as plt
 import pytorch_lightning
@@ -7,30 +9,35 @@ import typer
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 
-from classifier import PointNetClassifier
+from src.classifier import Classifier
 
 app = typer.Typer()
 
 
 @app.command()
 def train(
-    checkpoint_path: Path = typer.Option("output/checkpoints", "-c", "--checkpoint_path"),
-    logs_path: Path = typer.Option("output/logs", "-l", "--logs_path"),
+    out_path: Path = typer.Option("output", "-o", "--out_path"),
     auto_lr: bool = typer.Option(False, "-al", "--auto_lr"),
 ) -> Path:
-    # initialise the LightningModule
-    net = PointNetClassifier(Path("./data/"), 16, 0.001, 8)
 
-    # set up loggers and checkpoints
+    # Init out directory
+    ct = datetime.datetime.now().strftime("%m-%d-%Y.%H:%M:%S")
+    logs_path = os.path.join(out_path, ct, "logs")
+    checkpoint_path = os.path.join(out_path, ct, "checkpoint")
+
+    # Init the LightningModule
+    net = Classifier(Path("./data/"), 16, 0.01, 8)
+
+    # Set up loggers and checkpoints
     tb_logger = TensorBoardLogger(save_dir=str(logs_path))
     checkpoint_callback = ModelCheckpoint(
         dirpath=checkpoint_path, monitor="val_loss", mode="min", save_last=True,
     )
 
-    # initialise Lightning's trainer.
+    # Init Lightning's trainer.
     trainer = pytorch_lightning.Trainer(
         gpus=[0],
-        max_epochs=500,
+        max_epochs=100,
         logger=tb_logger,
         callbacks=[checkpoint_callback],
         num_sanity_val_steps=1,

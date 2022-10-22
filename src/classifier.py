@@ -12,13 +12,13 @@ from torch.nn import CrossEntropyLoss
 import torchmetrics
 from torchvision import transforms
 
-from dataset import make_dataset
-from models.dgcnn import DGCNN
-from models.pointnet import PointNet
-from transforms import NormalRandomOffsetTransform, RandomRotation
+from src.dataset.dataset import make_dataset
+from src.models.dgcnn import DGCNN
+from src.models.pointnet import PointNet
+from src.dataset.transforms import NormalRandomOffsetTransform, RandomRotation
 
 
-class PointNetClassifier(pl.LightningModule):
+class Classifier(pl.LightningModule):
     def __init__(self, dataset_path: Path, bs: int, lr: float, num_classes: int):
         super().__init__()
 
@@ -69,7 +69,10 @@ class PointNetClassifier(pl.LightningModule):
         self.train_ds = make_dataset(
             root_path=self.dataset_path,
             people_names=split_dict["train"],
-            transforms=transforms.Compose([NormalRandomOffsetTransform(0.005)])
+            transforms=transforms.Compose([
+                NormalRandomOffsetTransform(0.005),
+                RandomRotation([np.pi / 6, np.pi / 6, np.pi / 6])
+            ])
         )
         self.val_ds = make_dataset(root_path=self.dataset_path, people_names=split_dict["val"])
 

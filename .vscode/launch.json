@@ -21,7 +21,20 @@
             "cwd": "${workspaceFolder}",
             "presentation": {
                 "hidden": false,
-                "group": "2. Traning",
+                "group": "1. Traning",
+                "order": 0
+            },
+        },
+        {
+            "name": "Inference",
+            "type": "python",
+            "request": "launch",
+            "module": "inference",
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}",
+            "presentation": {
+                "hidden": false,
+                "group": "2. Inference",
                 "order": 0
             },
         },

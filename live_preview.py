@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from matplotlib import pyplot as plt
 
-from classifier import PointNetClassifier
+from src.classifier import Classifier
 from export_meshes import face_to_mesh, NoFacesFoundException
 
 emotion_map: dict[int, str] = {
@@ -20,7 +20,7 @@ emotion_map: dict[int, str] = {
 
 
 def main():
-    net = PointNetClassifier.load_from_checkpoint("pretrained_models/sample_model_0.ckpt").eval()
+    net = Classifier.load_from_checkpoint("pretrained_models/sample_model_0.ckpt").eval()
     for frame in camera_frame_generator():
         process_frame(net, frame)
 
