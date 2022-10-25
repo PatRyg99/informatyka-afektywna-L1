@@ -20,7 +20,7 @@ emotion_map: dict[int, str] = {
 
 
 def main():
-    net = Classifier.load_from_checkpoint("pretrained_models/sample_model_0.ckpt").eval()
+    net = Classifier.load_from_checkpoint("pretrained_models/dgcnn.ckpt").eval().cuda()
     for frame in camera_frame_generator():
         process_frame(net, frame)
 
@@ -33,8 +33,10 @@ def process_frame(net: nn.Module, frame: np.ndarray):
         cv2.imshow('face_landmarks', frame)
         return
 
-    vertices: torch.Tensor = torch.from_numpy(face_mesh.points).to(dtype=torch.float32)[None, ...]
-    pred = torch.sigmoid(net(vertices)[0])
+    face_points = face_mesh.points
+    face_points = (face_points - face_points.min()) / (face_points.max() - face_points.min()) - 0.5
+    vertices: torch.Tensor = torch.from_numpy(face_points).to(dtype=torch.float32)[None, ...].cuda()
+    pred = torch.sigmoid(net(vertices)[0]).cpu()
     predicted_class = torch.argmax(pred)
     predicted_label = emotion_map[predicted_class.item()]
     preview = write_on_image(preview, predicted_label)
@@ -52,7 +54,7 @@ def process_frame(net: nn.Module, frame: np.ndarray):
     )
     plot_array = plot_array.reshape(fig.canvas.get_width_height()[::-1] + (3,))
     cv2.imshow('probs', plot_array)
-    pass
+    plt.cla()
 
 
 def write_on_image(img, text: str):
