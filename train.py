@@ -26,7 +26,7 @@ def train(
     checkpoint_path = os.path.join(out_path, ct, "checkpoint")
 
     # Init the LightningModule
-    net = Classifier(Path("./data/"), 16, 0.01, 8)
+    net = Classifier(Path("./data/"), 16, 0.001, 8)
 
     # Set up loggers and checkpoints
     tb_logger = TensorBoardLogger(save_dir=str(logs_path))

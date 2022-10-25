@@ -15,7 +15,7 @@ app = typer.Typer()
 @app.command()
 def inference(
     data_path: Path = typer.Option("./data/", "-d", "--data_path"),
-    input_path: Path = typer.Option("output/10-22-2022.11:50:10", "-i", "--in_path"),
+    input_path: Path = typer.Option("output/10-22-2022.12:46:06", "-i", "--in_path"),
 ) -> Path:
 
     # Load model
