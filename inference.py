@@ -7,9 +7,10 @@ import pandas as pd
 
 import torch
 from torchvision import transforms
+from torch_geometric.loader import DataLoader
 
 from src.dataset.dataset import make_dataset
-from src.dataset.transforms import NormalizePointcloudd
+from src.dataset.transforms import NormalizePointcloudd, PointcloudToPyGData
 from src.classifier import Classifier
 
 app = typer.Typer()
@@ -18,7 +19,7 @@ app = typer.Typer()
 @app.command()
 def inference(
     data_path: Path = typer.Option("./data/", "-d", "--data_path"),
-    input_path: Path = typer.Option("output/10-22-2022.12:46:06-no-neutral", "-i", "--in_path"),
+    input_path: Path = typer.Option("output/11-22-2022.23:17:01", "-i", "--in_path"),
 ) -> Path:
 
     # Load model
@@ -43,17 +44,17 @@ def inference(
             people_names=split_dict[mode],
             transforms=transforms.Compose([
                 NormalizePointcloudd(["pointcloud"]),
+                PointcloudToPyGData()
             ])
         )
+        dl = DataLoader(ds, batch_size=1, shuffle=False,)
         preds = []
 
-        for data_dict in tqdm(ds, total=len(ds)):
-            x, y = data_dict["pointcloud"], data_dict["label"]
-
-            pred = torch.sigmoid(classifier(x[None, ...].cuda().float())[0])
+        for data in tqdm(dl, total=len(dl)):
+            pred = torch.sigmoid(classifier(data.cuda())[0])
             predicted_class = torch.argmax(pred).item()
 
-            preds.append({"predicted": predicted_class, "true": y.int().item()})
+            preds.append({"predicted": predicted_class, "true": data.y.int().item()})
 
         pd.DataFrame(preds).to_csv(os.path.join(input_path, f"{mode}_predictions.csv"), index=None)
 

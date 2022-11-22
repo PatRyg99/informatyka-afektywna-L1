@@ -16,6 +16,7 @@ from torchvision import transforms
 from src.dataset.dataset import make_dataset
 from src.models.dgcnn import DGCNN
 from src.dataset.transforms import PointcloudToPyGData, NormalizePointcloudd, RandomNormalOffsetd, RandomRotationd
+from src.dataset.dataloader import InterpolateDataLoader
 
 
 class Classifier(pl.LightningModule):
@@ -80,7 +81,7 @@ class Classifier(pl.LightningModule):
         )
 
     def train_dataloader(self):
-        return DataLoader(
+        return InterpolateDataLoader(
             self.train_ds,
             batch_size=self.bs,
             shuffle=True,
