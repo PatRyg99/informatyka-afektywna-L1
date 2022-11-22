@@ -7,15 +7,15 @@ import pytorch_lightning as pl
 import torch
 import torch.cuda
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
 from torch.nn import CrossEntropyLoss
+from torch_geometric.loader import DataLoader
+
 import torchmetrics
 from torchvision import transforms
 
 from src.dataset.dataset import make_dataset
 from src.models.dgcnn import DGCNN
-from src.models.pointnet import PointNet
-from src.dataset.transforms import NormalRandomOffsetTransform, RandomRotation
+from src.dataset.transforms import PointcloudToPyGData, NormalizePointcloudd, RandomNormalOffsetd, RandomRotationd
 
 
 class Classifier(pl.LightningModule):
@@ -36,20 +36,13 @@ class Classifier(pl.LightningModule):
         )
 
         self.model = DGCNN(
-            channels=[3, 64, 128, 256],
-            head_channels=[256, 128],
-            num_classes=num_classes,
-            k=20
+            blocks_mlp=[
+                [2 * 3, 64, 64, 64],
+                [2 * 64, 64, 128]
+            ],
+            aggr_mlp=[128 + 64, 256],
+            head_mlp=[256, 128, num_classes],
         )
-        # self.model = PointNet(
-        #     dim=3,
-        #     channels=(8, 16, 32, 64, 128, 256),
-        #     tnets=(True, True, False, False, False),
-        #     classes=num_classes,
-        #     stride=1,
-        #     main_kernel_size=1,
-        #     branch_kernel_sizes=(1, 3)
-        # )
 
     def forward(self, x):
         return self.model(x)
@@ -70,11 +63,21 @@ class Classifier(pl.LightningModule):
             root_path=self.dataset_path,
             people_names=split_dict["train"],
             transforms=transforms.Compose([
-                NormalRandomOffsetTransform(0.005),
-                RandomRotation([np.pi / 6, np.pi / 6, np.pi / 6])
+                NormalizePointcloudd(["pointcloud"]),
+                RandomNormalOffsetd(["pointcloud"], 0.005),
+                RandomRotationd(["pointcloud"], [np.pi / 6, np.pi / 6, np.pi / 6]),
+                PointcloudToPyGData()
             ])
         )
-        self.val_ds = make_dataset(root_path=self.dataset_path, people_names=split_dict["val"])
+
+        self.val_ds = make_dataset(
+            root_path=self.dataset_path,
+            people_names=split_dict["val"],
+            transforms=transforms.Compose([
+                NormalizePointcloudd(["pointcloud"]),
+                PointcloudToPyGData()
+            ])
+        )
 
     def train_dataloader(self):
         return DataLoader(
@@ -99,22 +102,21 @@ class Classifier(pl.LightningModule):
         return optimizer
 
     def shared_step(self, batch):
-        pointclouds, labels = batch
-        preds = self.forward(pointclouds.float())
+        preds = self.forward(batch)
 
-        loss = self.loss(preds, labels.long())
+        loss = self.loss(preds, batch.y.long())
 
-        log_preds = F.log_softmax(preds)
-        acc = self.acc(log_preds, labels.int())
-        f1_score = self.f1_score(log_preds, labels.int())
+        log_preds = F.log_softmax(preds, dim=1)
+        acc = self.acc(log_preds, batch.y.int())
+        f1_score = self.f1_score(log_preds, batch.y.int())
 
         return loss, acc, f1_score
 
     def training_step(self, batch, batch_idx):
         loss, acc, f1_score = self.shared_step(batch)
-        self.log("train_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-        self.log("train_acc", acc, on_epoch=True, prog_bar=False, logger=True)
-        self.log("train_f1_score", f1_score, on_epoch=True, prog_bar=False, logger=True)
+        self.log("train_loss", loss, on_epoch=True, prog_bar=True, logger=True, batch_size=self.bs)
+        self.log("train_acc", acc, on_epoch=True, prog_bar=False, logger=True, batch_size=self.bs)
+        self.log("train_f1_score", f1_score, on_epoch=True, prog_bar=False, logger=True, batch_size=self.bs)
 
         return loss
 
@@ -122,5 +124,5 @@ class Classifier(pl.LightningModule):
         loss, acc, f1_score = self.shared_step(batch)
 
         metrics = {"val_loss": loss, "val_acc": acc, "val_f1_score": f1_score}
-        self.log_dict(metrics, on_epoch=True)
+        self.log_dict(metrics, on_epoch=True, batch_size=self.bs)
         return metrics
