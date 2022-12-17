@@ -8,7 +8,7 @@ from pqdm.processes import pqdm
 
 
 def main():
-    data_path = Path("./data")
+    data_path = Path("./data/CK-dataset")
     images_root_path = data_path / "./image"
     pointclouds_root_path = data_path / "./pointcloud"
     preview_root_path = data_path / "./preview"
@@ -55,7 +55,10 @@ def face_to_mesh(face_img: np.ndarray) -> Tuple[pv.PolyData, np.ndarray]:
             for landmark in face_landmarks.landmark
         ]
     )
-    poly = pv.PolyData(nodes)
+    edges = np.array(list(mp.solutions.face_mesh.FACEMESH_TESSELATION))
+    edges = np.c_[2 * np.ones(len(edges))[:, None], edges].flatten().astype(int)
+
+    poly = pv.PolyData(nodes, lines=edges)
     return poly, preview
 
 

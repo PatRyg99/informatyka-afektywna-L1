@@ -13,7 +13,20 @@
             "justMyCode": true
         },
         {
-            "name": "Train",
+            "name": "Export meshes",
+            "type": "python",
+            "request": "launch",
+            "module": "export_meshes",
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}",
+            "presentation": {
+                "hidden": false,
+                "group": "1. Data",
+                "order": 0
+            },
+        },
+        {
+            "name": "Train DGCNN",
             "type": "python",
             "request": "launch",
             "module": "train",
@@ -21,12 +34,12 @@
             "cwd": "${workspaceFolder}",
             "presentation": {
                 "hidden": false,
-                "group": "1. Traning",
+                "group": "2. Traning",
                 "order": 0
             },
         },
         {
-            "name": "Inference",
+            "name": "Inference DGCNN",
             "type": "python",
             "request": "launch",
             "module": "inference",
@@ -34,7 +47,7 @@
             "cwd": "${workspaceFolder}",
             "presentation": {
                 "hidden": false,
-                "group": "2. Inference",
+                "group": "3. Inference",
                 "order": 0
             },
         },

@@ -15,7 +15,7 @@ from torchvision import transforms
 
 from src.dataset.dataset import make_dataset
 from src.models.dgcnn import DGCNN
-from src.dataset.transforms import PointcloudToPyGData, NormalizePointcloudd, RandomNormalOffsetd, RandomRotationd
+from src.dataset.transforms import GraphToPyGData, NormalizePointcloudd, RandomNormalOffsetd, RandomRotationd
 from src.dataset.dataloader import InterpolateDataLoader
 
 
@@ -64,10 +64,10 @@ class Classifier(pl.LightningModule):
             root_path=self.dataset_path,
             people_names=split_dict["train"],
             transforms=transforms.Compose([
-                NormalizePointcloudd(["pointcloud"]),
-                RandomNormalOffsetd(["pointcloud"], 0.005),
-                RandomRotationd(["pointcloud"], [np.pi / 6, np.pi / 6, np.pi / 6]),
-                PointcloudToPyGData()
+                NormalizePointcloudd(["points"]),
+                RandomNormalOffsetd(["points"], 0.005),
+                RandomRotationd(["points"], [np.pi / 6, np.pi / 6, np.pi / 6]),
+                GraphToPyGData()
             ])
         )
 
@@ -75,8 +75,8 @@ class Classifier(pl.LightningModule):
             root_path=self.dataset_path,
             people_names=split_dict["val"],
             transforms=transforms.Compose([
-                NormalizePointcloudd(["pointcloud"]),
-                PointcloudToPyGData()
+                NormalizePointcloudd(["points"]),
+                GraphToPyGData()
             ])
         )
 

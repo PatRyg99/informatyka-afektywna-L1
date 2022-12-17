@@ -67,15 +67,16 @@ class SinglePersonDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
         pointcloud_path, label_path = self.paths[index]
-        return self.load_points(pointcloud_path), self.load_label(label_path)
+        return *self.load_graph(pointcloud_path), self.load_label(label_path)
 
     def load_label(self, label_path: Path) -> torch.Tensor:
         return torch.from_numpy(np.loadtxt(label_path, dtype=np.float32))
 
-    def load_points(self, pointcloud_path: Path) -> torch.Tensor:
+    def load_graph(self, pointcloud_path: Path) -> torch.Tensor:
         poly_data: pv.PolyData = pv.read(str(pointcloud_path))
-        poly: torch.Tensor = torch.from_numpy(poly_data.points)
-        return poly
+        points: torch.Tensor = torch.from_numpy(poly_data.points)
+        edges: torch.Tensor = torch.from_numpy(poly_data.lines.reshape(-1, 3)[:, 1:])
+        return points, edges
 
 
 def make_dataset(
@@ -92,5 +93,5 @@ def make_dataset(
         ]
     )
 
-    data_dict = [{"pointcloud": pointcloud, "label": label} for pointcloud, label in raw_dataset]
+    data_dict = [{"points": points, "edges": edges, "label": label} for points, edges, label in raw_dataset]
     return monai.data.CacheDataset(data=data_dict, cache_rate=1.0, transform=transforms, num_workers=num_workers)

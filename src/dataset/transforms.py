@@ -7,12 +7,12 @@ import numpy as np
 from monai.transforms.transform import MapTransform, Randomizable
 from monai.config import KeysCollection
 
-class PointcloudToPyGData:
-    """Convert pointcloud to pytorch geometric data object"""
+class GraphToPyGData:
+    """Convert graph to pytorch geometric data object"""
 
     def __call__(self, data):
-        pos, y = data["pointcloud"], data["label"]
-        pyg_data = Data(y=y.long(), pos=pos.float())
+        pos, edge_index, y = data["points"], data["edges"], data["label"]
+        pyg_data = Data(y=y.long(), pos=pos.float(), edge_index=edge_index.T.long())
 
         return pyg_data
 
