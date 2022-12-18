@@ -16,8 +16,9 @@ app = typer.Typer()
 
 @app.command()
 def train(
-    in_path: Path = typer.Option("data/CK-dataset", "-i", "--in_path"),
+    in_path: Path = typer.Option("data/AffectNet-HQ", "-i", "--in_path"),
     out_path: Path = typer.Option("output", "-o", "--out_path"),
+    model_name: str = typer.Option("dgcnn", "-m", "--model-name"),
     auto_lr: bool = typer.Option(False, "-al", "--auto_lr"),
 ) -> Path:
 
@@ -27,7 +28,7 @@ def train(
     checkpoint_path = os.path.join(out_path, ct, "checkpoint")
 
     # Init the LightningModule
-    net = Classifier(Path(in_path), 16, 0.001, 8)
+    net = Classifier(Path(in_path), str(model_name), 16, 0.001, 8)
 
     # Set up loggers and checkpoints
     tb_logger = TensorBoardLogger(save_dir=str(logs_path))

@@ -22,7 +22,7 @@ class DGCNN(nn.Module):
         self.head_mlp = MLP(head_mlp, dropout=0.5)
 
     def forward(self, data):
-        pos, batch = data.pos, data.batch
+        pos, batch = data.x, data.batch
 
         # Iterate over blocks and collect interim results
         xs = [pos]

@@ -9,8 +9,8 @@ import torch
 from torchvision import transforms
 from torch_geometric.loader import DataLoader
 
-from src.dataset.dataset import make_dataset
-from src.dataset.transforms import NormalizePointcloudd, PointcloudToPyGData
+from dataset.ck_dataset import make_dataset
+from src.dataset.transforms import NormalizePointcloudd, GraphToPyGData
 from src.classifier import Classifier
 
 app = typer.Typer()
@@ -44,14 +44,14 @@ def inference(
             people_names=split_dict[mode],
             transforms=transforms.Compose([
                 NormalizePointcloudd(["pointcloud"]),
-                PointcloudToPyGData()
+                GraphToPyGData()
             ])
         )
         dl = DataLoader(ds, batch_size=1, shuffle=False,)
         preds = []
 
         for data in tqdm(dl, total=len(dl)):
-            pred = torch.sigmoid(classifier(data.cuda())[0])
+            pred = torch.softmax(classifier(data.cuda())[0])
             predicted_class = torch.argmax(pred).item()
 
             preds.append({"predicted": predicted_class, "true": data.y.int().item()})

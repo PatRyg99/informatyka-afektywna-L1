@@ -83,7 +83,7 @@ def make_dataset(
     root_path: Path,
     people_names: List[str],
     transforms: Callable = None,
-    num_workers: int = 6
+    num_workers: int = 10
 ) -> torch.utils.data.Dataset:
 
     raw_dataset = torch.utils.data.ConcatDataset(

@@ -1,20 +1,119 @@
-from typing import List
+import os
+from pathlib import Path
+from typing import List, Dict
+
+import robust_laplacian
+import scipy
+import scipy.sparse.linalg as sla
 
 import torch
 from torch_geometric.data import Data
+from torch_geometric.utils import to_undirected
 
 import numpy as np
+import pandas as pd
+import pyvista as pv
+
 from monai.transforms.transform import MapTransform, Randomizable
 from monai.config import KeysCollection
+
+class LoadSampled(MapTransform):
+    """Loads affectNet sample"""
+
+    def __init__(
+        self,
+        keys: KeysCollection,
+        labels_path: str,
+        label_map: Dict[str, int],
+        allow_missing_keys: bool = False
+    ) -> None:
+
+        MapTransform.__init__(self, keys, allow_missing_keys)
+        self.labels = pd.read_csv(labels_path)
+        self.label_map = label_map
+
+    def __call__(self, data):
+        d = dict(data)
+
+        for key in self.key_iterator(d):
+            vtk_path = d[key]
+
+            poly_data: pv.PolyData = pv.read(str(vtk_path))
+            points: torch.Tensor = torch.from_numpy(poly_data.points)
+            edges: torch.Tensor = torch.from_numpy(poly_data.lines.reshape(-1, 3)[:, 1:])
+
+            jpg_rel_path = os.path.join(*str(Path(vtk_path).with_suffix(".jpg")).split("/")[-2:])
+            label: int = self.label_map[
+                self.labels[self.labels["pth"] == jpg_rel_path]["label"].item()
+            ]
+
+            d["points"] = points
+            d["edges"] = edges
+            d["label"] = torch.tensor(label)
+
+        return d
 
 class GraphToPyGData:
     """Convert graph to pytorch geometric data object"""
 
     def __call__(self, data):
-        pos, edge_index, y = data["points"], data["edges"], data["label"]
-        pyg_data = Data(y=y.long(), pos=pos.float(), edge_index=edge_index.T.long())
+        x, pos, edge_index, y = data["hks"], data["points"], data["edges"], data["label"]
+
+        edge_index = to_undirected(edge_index.T.long())
+        pyg_data = Data(y=y.long(), x=x.float(), pos=pos.float(), edge_index=edge_index)
 
         return pyg_data
+
+class ComputeHKSFeaturesd(MapTransform):
+    """
+    Computes heat kernel signatures based on eigendecomposition 
+    of a Laplace-Beltrami operator of a surface.
+    """
+
+    def __init__(
+        self,
+        keys: KeysCollection,
+        hks_key: str,
+        k_eig: int,
+        num_features: int,
+        eps: float = 1e-8,
+        allow_missing_keys: bool = False
+    ) -> None:
+
+        MapTransform.__init__(self, keys, allow_missing_keys)
+        self.hks_key = hks_key
+        self.k_eig = k_eig
+        self.num_features = num_features
+        self.eps = eps
+
+    def __call__(self, data):
+        d = dict(data)
+
+        for key in self.key_iterator(d):
+            points = d[key]
+
+            # Build laplacian
+            L, M = robust_laplacian.point_cloud_laplacian(points.numpy())
+            massvec = M.diagonal()
+
+            # Compute eigenbasis
+            L_eigsh = (L + scipy.sparse.identity(L.shape[0]) * self.eps).tocsc()
+            massvec_eigsh = massvec
+            Mmat = scipy.sparse.diags(massvec_eigsh)
+
+            evals, evecs = sla.eigsh(L_eigsh, k=self.k_eig, M=Mmat, sigma=self.eps)
+            evals = np.clip(evals, a_min=0.0, a_max=float("inf"))
+
+            # Compute hks
+            scales = np.logspace(-2, 0., num=self.num_features)
+
+            power_coefs = np.exp(-evals[None] * scales[..., None])[None]
+            terms = power_coefs * (evecs * evecs)[:, None]
+            out = np.sum(terms, axis=-1)
+
+            d[self.hks_key] = torch.tensor(out)
+
+        return d
 
 class NormalizePointcloudd(MapTransform):
     """Normalizes pointcloud to [-0.5, 0.5] cube"""

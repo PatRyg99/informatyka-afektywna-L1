@@ -1,3 +1,4 @@
+import os
 import json
 from pathlib import Path
 
@@ -8,19 +9,31 @@ import torch
 import torch.cuda
 import torch.nn.functional as F
 from torch.nn import CrossEntropyLoss
-from torch_geometric.loader import DataLoader
 
 import torchmetrics
-from torchvision import transforms
+from monai.transforms import Compose
 
-from src.dataset.dataset import make_dataset
+#from src.dataset.ck_dataset import make_dataset
+from src.dataset.affect_net_dataset import make_dataset
+
 from src.models.dgcnn import DGCNN
-from src.dataset.transforms import GraphToPyGData, NormalizePointcloudd, RandomNormalOffsetd, RandomRotationd
-from src.dataset.dataloader import InterpolateDataLoader
+from src.models.feast_gcn import FeastGCN
+from src.models.sage_gcn import SAGEGCN
+
+from src.dataset.transforms import (
+    GraphToPyGData,
+    NormalizePointcloudd,
+    RandomNormalOffsetd,
+    RandomRotationd,
+    ComputeHKSFeaturesd,
+    LoadSampled
+)
+from src.dataset.dl_transforms import InterpolateGraphs
+from src.dataset.dataloader import TransformsDataLoader
 
 
 class Classifier(pl.LightningModule):
-    def __init__(self, dataset_path: Path, bs: int, lr: float, num_classes: int):
+    def __init__(self, dataset_path: Path, model_name: str, bs: int, lr: float, num_classes: int):
         super().__init__()
 
         self.save_hyperparameters()
@@ -36,14 +49,38 @@ class Classifier(pl.LightningModule):
             num_classes=num_classes, average="macro"
         )
 
-        self.model = DGCNN(
-            blocks_mlp=[
-                [2 * 3, 64, 64, 64],
-                [2 * 64, 64, 128]
-            ],
-            aggr_mlp=[128 + 64, 256],
-            head_mlp=[256, 128, num_classes],
-        )
+        if model_name == "dgcnn":
+            self.model = DGCNN(
+                blocks_mlp=[
+                    [2 * 16, 64, 64, 64],
+                    [2 * 64, 64, 128]
+                ],
+                aggr_mlp=[128 + 64, 256],
+                head_mlp=[256, 128, num_classes],
+            )
+
+        elif model_name == "feast":
+            self.model = FeastGCN(
+                block_channels=[
+                    [16, 16, 32, 64],
+                    [64, 64, 64, 128],
+                ],
+                aggr_channels=[128 + 64, 256],
+                head_channels=[256, 128, num_classes]
+            )
+
+        elif model_name == "sage":
+            self.model = SAGEGCN(
+                block_channels=[
+                    [16, 16, 32, 64],
+                    [64, 64, 64, 128],
+                ],
+                aggr_channels=[128 + 64, 256],
+                head_channels=[256, 128, num_classes]
+            )
+
+        else:
+            raise NotImplementedError(f"Model '{model_name}' is not implemented. Choose from: ['dgcnn', 'feast', 'sage'].")
 
     def forward(self, x):
         return self.model(x)
@@ -57,52 +94,81 @@ class Classifier(pl.LightningModule):
         return labels
 
     def prepare_data(self):
-        with Path("split.json").open() as file:
-            split_dict = json.load(file)
+
+        label_map = {
+            "neutral": 0,
+            "anger": 1,
+            "contempt": 2,
+            "disgust": 3,
+            "fear": 4,
+            "happy": 5,
+            "sad": 6,
+            "surprise": 7
+        }
 
         self.train_ds = make_dataset(
             root_path=self.dataset_path,
-            people_names=split_dict["train"],
-            transforms=transforms.Compose([
+            transforms=Compose([
+                LoadSampled(["sample_path"], os.path.join(self.dataset_path, "labels.csv"), label_map),
                 NormalizePointcloudd(["points"]),
+                ComputeHKSFeaturesd(["points"], "hks", 128, 16),
                 RandomNormalOffsetd(["points"], 0.005),
                 RandomRotationd(["points"], [np.pi / 6, np.pi / 6, np.pi / 6]),
                 GraphToPyGData()
             ])
         )
 
-        self.val_ds = make_dataset(
-            root_path=self.dataset_path,
-            people_names=split_dict["val"],
-            transforms=transforms.Compose([
-                NormalizePointcloudd(["points"]),
-                GraphToPyGData()
-            ])
-        )
+        # with Path("split.json").open() as file:
+        #     split_dict = json.load(file)
+
+        # self.train_ds = make_dataset(
+        #     root_path=self.dataset_path,
+        #     people_names=split_dict["train"],
+        #     transforms=Compose([
+        #         NormalizePointcloudd(["points"]),
+        #         ComputeHKSFeaturesd(["points"], "hks", 128, 16),
+        #         RandomNormalOffsetd(["points"], 0.005),
+        #         RandomRotationd(["points"], [np.pi / 6, np.pi / 6, np.pi / 6]),
+        #         GraphToPyGData()
+        #     ])
+        # )
+
+        # self.val_ds = make_dataset(
+        #     root_path=self.dataset_path,
+        #     people_names=split_dict["val"],
+        #     transforms=Compose([
+        #         NormalizePointcloudd(["points"]),
+        #         ComputeHKSFeaturesd(["points"], "hks", 128, 16),
+        #         GraphToPyGData()
+        #     ])
+        # )
 
     def train_dataloader(self):
-        return InterpolateDataLoader(
+        transforms = None #InterpolateGraphs()
+
+        return TransformsDataLoader(
             self.train_ds,
             batch_size=self.bs,
             shuffle=True,
             num_workers=8,
-            drop_last=True
+            drop_last=True,
+            transforms=transforms
         )
 
-    def val_dataloader(self):
-        return DataLoader(
-            self.val_ds,
-            batch_size=self.bs,
-            shuffle=False,
-            num_workers=8,
-            drop_last=True
-        )
+    # def val_dataloader(self):
+    #     return TransformsDataLoader(
+    #         self.val_ds,
+    #         batch_size=self.bs,
+    #         shuffle=False,
+    #         num_workers=8,
+    #         drop_last=True
+    #     )
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.model.parameters(), self.lr)
         return optimizer
 
-    def shared_step(self, batch):
+    def shared_step(self, batch, key):
         preds = self.forward(batch)
 
         loss = self.loss(preds, batch.y.long())
@@ -111,19 +177,13 @@ class Classifier(pl.LightningModule):
         acc = self.acc(log_preds, batch.y.int())
         f1_score = self.f1_score(log_preds, batch.y.int())
 
-        return loss, acc, f1_score
-
-    def training_step(self, batch, batch_idx):
-        loss, acc, f1_score = self.shared_step(batch)
-        self.log("train_loss", loss, on_epoch=True, prog_bar=True, logger=True, batch_size=self.bs)
-        self.log("train_acc", acc, on_epoch=True, prog_bar=False, logger=True, batch_size=self.bs)
-        self.log("train_f1_score", f1_score, on_epoch=True, prog_bar=False, logger=True, batch_size=self.bs)
+        metrics = {f"{key}_loss": loss, f"{key}_acc": acc, f"{key}_f1_score": f1_score}
+        self.log_dict(metrics, on_epoch=True, on_step=False, batch_size=self.bs)
 
         return loss
 
-    def validation_step(self, batch, batch_idx):
-        loss, acc, f1_score = self.shared_step(batch)
+    def training_step(self, batch, batch_idx):
+        return self.shared_step(batch, "train")
 
-        metrics = {"val_loss": loss, "val_acc": acc, "val_f1_score": f1_score}
-        self.log_dict(metrics, on_epoch=True, batch_size=self.bs)
-        return metrics
+    def validation_step(self, batch, batch_idx):
+        return self.shared_step(batch, "val")

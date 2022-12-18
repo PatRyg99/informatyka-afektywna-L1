@@ -26,10 +26,14 @@
             },
         },
         {
-            "name": "Train DGCNN",
+            "name": "Train",
             "type": "python",
             "request": "launch",
             "module": "train",
+            "args": [
+                "--model-name",
+                "dgcnn"
+            ],
             "justMyCode": false,
             "cwd": "${workspaceFolder}",
             "presentation": {
@@ -39,7 +43,7 @@
             },
         },
         {
-            "name": "Inference DGCNN",
+            "name": "Inference",
             "type": "python",
             "request": "launch",
             "module": "inference",

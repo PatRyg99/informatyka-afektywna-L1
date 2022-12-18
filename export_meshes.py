@@ -8,11 +8,11 @@ from pqdm.processes import pqdm
 
 
 def main():
-    data_path = Path("./data/CK-dataset")
+    data_path = Path("./data/AffectNet-HQ")
     images_root_path = data_path / "./image"
     pointclouds_root_path = data_path / "./pointcloud"
     preview_root_path = data_path / "./preview"
-    paths = list(data_path.glob("**/*.png"))
+    paths = list(data_path.glob("**/*.jpg"))
 
     args = [
         (
