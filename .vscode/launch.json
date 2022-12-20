@@ -32,7 +32,9 @@
             "module": "train",
             "args": [
                 "--model-name",
-                "dgcnn"
+                "sage",
+                "--features",
+                "xyz"
             ],
             "justMyCode": false,
             "cwd": "${workspaceFolder}",

@@ -1,89 +1,90 @@
-import os
 import json
 from pathlib import Path
 
 import numpy as np
 import pytorch_lightning as pl
-
 import torch
 import torch.cuda
 import torch.nn.functional as F
-from torch.nn import CrossEntropyLoss
-
 import torchmetrics
 from monai.transforms import Compose
+from torch.nn import CrossEntropyLoss
 
-#from src.dataset.ck_dataset import make_dataset
-from src.dataset.affect_net_dataset import make_dataset
-
-from src.models.dgcnn import DGCNN
-from src.models.feast_gcn import FeastGCN
-from src.models.sage_gcn import SAGEGCN
-
+from src.dataset.ck_dataset import make_dataset
+from src.dataset.dataloader import TransformsDataLoader
+from src.dataset.dl_transforms import InterpolateGraphs
 from src.dataset.transforms import (
+    ComputeHKSFeaturesd,
     GraphToPyGData,
     NormalizePointcloudd,
     RandomNormalOffsetd,
     RandomRotationd,
-    ComputeHKSFeaturesd,
-    LoadSampled
 )
-from src.dataset.dl_transforms import InterpolateGraphs
-from src.dataset.dataloader import TransformsDataLoader
+from src.models.dgcnn import DGCNN
+from src.models.feast_gcn import FeastGCN
+from src.models.sage_gcn import SAGEGCN
 
 
 class Classifier(pl.LightningModule):
-    def __init__(self, dataset_path: Path, model_name: str, bs: int, lr: float, num_classes: int):
+    def __init__(
+        self,
+        dataset_path: Path,
+        model_name: str,
+        features: str,
+        bs: int,
+        lr: float,
+        num_classes: int,
+    ):
         super().__init__()
 
         self.save_hyperparameters()
 
+        self.features = features
         self.dataset_path = dataset_path
         self.bs = bs
         self.lr = lr
         self.num_classes = num_classes
 
+        # Define loss and metrics
         self.loss = CrossEntropyLoss()
         self.acc = torchmetrics.Accuracy(num_classes=num_classes, average="macro")
-        self.f1_score = torchmetrics.F1Score(
-            num_classes=num_classes, average="macro"
-        )
+        self.f1_score = torchmetrics.F1Score(num_classes=num_classes, average="macro")
 
+        # Define features
+        in_channels = 3 if self.features == "xyz" else 16
+
+        # Define model
         if model_name == "dgcnn":
             self.model = DGCNN(
-                blocks_mlp=[
-                    [2 * 16, 64, 64, 64],
-                    [2 * 64, 64, 128]
-                ],
+                blocks_mlp=[[2 * in_channels, 64, 64, 64], [2 * 64, 64, 128]],
                 aggr_mlp=[128 + 64, 256],
                 head_mlp=[256, 128, num_classes],
             )
 
         elif model_name == "feast":
             self.model = FeastGCN(
-                block_channels=[
-                    [16, 16, 32, 64],
-                    [64, 64, 64, 128],
-                ],
+                block_channels=[[in_channels, 16, 32, 64], [64, 64, 64, 128]],
                 aggr_channels=[128 + 64, 256],
-                head_channels=[256, 128, num_classes]
+                head_channels=[256, 128, num_classes],
             )
 
         elif model_name == "sage":
             self.model = SAGEGCN(
-                block_channels=[
-                    [16, 16, 32, 64],
-                    [64, 64, 64, 128],
-                ],
+                block_channels=[[in_channels, 16, 32, 64], [64, 64, 64, 128]],
                 aggr_channels=[128 + 64, 256],
-                head_channels=[256, 128, num_classes]
+                head_channels=[256, 128, num_classes],
             )
 
         else:
-            raise NotImplementedError(f"Model '{model_name}' is not implemented. Choose from: ['dgcnn', 'feast', 'sage'].")
+            raise NotImplementedError(
+                f"Model '{model_name}' is not implemented. Choose from: ['dgcnn', 'feast', 'sage']."
+            )
 
-    def forward(self, x):
-        return self.model(x)
+    def forward(self, data):
+        x = data.pos if self.features == "xyz" else data.x
+        edge_index, batch = data.edge_index, data.batch
+
+        return self.model(x, edge_index, batch)
 
     def remap_labels(self, labels):
         uniques = np.unique(labels)
@@ -95,56 +96,37 @@ class Classifier(pl.LightningModule):
 
     def prepare_data(self):
 
-        label_map = {
-            "neutral": 0,
-            "anger": 1,
-            "contempt": 2,
-            "disgust": 3,
-            "fear": 4,
-            "happy": 5,
-            "sad": 6,
-            "surprise": 7
-        }
+        with Path("split.json").open() as file:
+            split_dict = json.load(file)
 
         self.train_ds = make_dataset(
             root_path=self.dataset_path,
-            transforms=Compose([
-                LoadSampled(["sample_path"], os.path.join(self.dataset_path, "labels.csv"), label_map),
-                NormalizePointcloudd(["points"]),
-                ComputeHKSFeaturesd(["points"], "hks", 128, 16),
-                RandomNormalOffsetd(["points"], 0.005),
-                RandomRotationd(["points"], [np.pi / 6, np.pi / 6, np.pi / 6]),
-                GraphToPyGData()
-            ])
+            people_names=split_dict["train"],
+            transforms=Compose(
+                [
+                    NormalizePointcloudd(["points"]),
+                    ComputeHKSFeaturesd(["points"], "hks", 128, 16),
+                    RandomNormalOffsetd(["points"], 0.005),
+                    RandomRotationd(["points"], [np.pi / 6, np.pi / 6, np.pi / 6]),
+                    GraphToPyGData(x="hks"),
+                ]
+            ),
         )
 
-        # with Path("split.json").open() as file:
-        #     split_dict = json.load(file)
-
-        # self.train_ds = make_dataset(
-        #     root_path=self.dataset_path,
-        #     people_names=split_dict["train"],
-        #     transforms=Compose([
-        #         NormalizePointcloudd(["points"]),
-        #         ComputeHKSFeaturesd(["points"], "hks", 128, 16),
-        #         RandomNormalOffsetd(["points"], 0.005),
-        #         RandomRotationd(["points"], [np.pi / 6, np.pi / 6, np.pi / 6]),
-        #         GraphToPyGData()
-        #     ])
-        # )
-
-        # self.val_ds = make_dataset(
-        #     root_path=self.dataset_path,
-        #     people_names=split_dict["val"],
-        #     transforms=Compose([
-        #         NormalizePointcloudd(["points"]),
-        #         ComputeHKSFeaturesd(["points"], "hks", 128, 16),
-        #         GraphToPyGData()
-        #     ])
-        # )
+        self.val_ds = make_dataset(
+            root_path=self.dataset_path,
+            people_names=split_dict["val"],
+            transforms=Compose(
+                [
+                    NormalizePointcloudd(["points"]),
+                    ComputeHKSFeaturesd(["points"], "hks", 128, 16),
+                    GraphToPyGData(x="hks"),
+                ]
+            ),
+        )
 
     def train_dataloader(self):
-        transforms = None #InterpolateGraphs()
+        transforms = InterpolateGraphs()
 
         return TransformsDataLoader(
             self.train_ds,
@@ -152,17 +134,17 @@ class Classifier(pl.LightningModule):
             shuffle=True,
             num_workers=8,
             drop_last=True,
-            transforms=transforms
+            transforms=transforms,
         )
 
-    # def val_dataloader(self):
-    #     return TransformsDataLoader(
-    #         self.val_ds,
-    #         batch_size=self.bs,
-    #         shuffle=False,
-    #         num_workers=8,
-    #         drop_last=True
-    #     )
+    def val_dataloader(self):
+        return TransformsDataLoader(
+            self.val_ds,
+            batch_size=self.bs,
+            shuffle=False,
+            num_workers=8,
+            drop_last=True,
+        )
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.model.parameters(), self.lr)

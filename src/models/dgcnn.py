@@ -1,9 +1,10 @@
 from typing import List
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-
 from torch_geometric.nn import MLP, DynamicEdgeConv, global_max_pool
+
+
 class DGCNN(nn.Module):
     def __init__(
         self,
@@ -11,18 +12,17 @@ class DGCNN(nn.Module):
         aggr_mlp: List[int],
         head_mlp: List[int],
         k: int = 20,
-        aggr: str = "max"
+        aggr: str = "max",
     ):
         super().__init__()
 
-        self.blocks = nn.ModuleList([
-            DynamicEdgeConv(MLP(mlp), k, aggr) for mlp in blocks_mlp
-        ])
+        self.blocks = nn.ModuleList(
+            [DynamicEdgeConv(MLP(mlp), k, aggr) for mlp in blocks_mlp]
+        )
         self.aggr_mlp = nn.Linear(*aggr_mlp)
         self.head_mlp = MLP(head_mlp, dropout=0.5)
 
-    def forward(self, data):
-        pos, batch = data.x, data.batch
+    def forward(self, pos, edge_index, batch):
 
         # Iterate over blocks and collect interim results
         xs = [pos]
