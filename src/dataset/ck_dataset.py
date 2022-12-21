@@ -2,25 +2,22 @@ from pathlib import Path
 from typing import List, Tuple, Callable
 
 import torch
-import torch.nn as nn
 import torch.utils.data
+import monai
 import numpy as np
 import pyvista as pv
-
 
 class SinglePersonDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         root_path: Path,
         person_name: str,
-        transforms: Callable,
         percentage_of_used_frames: float = 0.2,
-        percentage_of_neutral_frames: float = 0.07
+        percentage_of_neutral_frames: float = 0.00
     ):
         super().__init__()
         self.root_path = root_path
         self.person_name = person_name
-        self.transforms = transforms or nn.Identity()
         self.percentage_of_used_frames = percentage_of_used_frames
         self.percentage_of_neutral_frames = percentage_of_neutral_frames
 
@@ -70,22 +67,31 @@ class SinglePersonDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
         pointcloud_path, label_path = self.paths[index]
-        return self.load_points(pointcloud_path), self.load_label(label_path)
+        return *self.load_graph(pointcloud_path), self.load_label(label_path)
 
     def load_label(self, label_path: Path) -> torch.Tensor:
         return torch.from_numpy(np.loadtxt(label_path, dtype=np.float32))
 
-    def load_points(self, pointcloud_path: Path) -> torch.Tensor:
+    def load_graph(self, pointcloud_path: Path) -> torch.Tensor:
         poly_data: pv.PolyData = pv.read(str(pointcloud_path))
-        poly: torch.Tensor = torch.from_numpy(poly_data.points)
-        poly = (poly - poly.min()) / (poly.max() - poly.min()) - 0.5
-        return self.transforms(poly)
+        points: torch.Tensor = torch.from_numpy(poly_data.points)
+        edges: torch.Tensor = torch.from_numpy(poly_data.lines.reshape(-1, 3)[:, 1:])
+        return points, edges
 
 
-def make_dataset(root_path: Path, people_names: List[str], transforms: Callable = None) -> torch.utils.data.Dataset:
-    return torch.utils.data.ConcatDataset(
+def make_dataset(
+    root_path: Path,
+    people_names: List[str],
+    transforms: Callable = None,
+    num_workers: int = 10
+) -> torch.utils.data.Dataset:
+
+    raw_dataset = torch.utils.data.ConcatDataset(
         [
-            SinglePersonDataset(root_path, person_name=person_name, transforms=transforms)
+            SinglePersonDataset(root_path, person_name=person_name)
             for person_name in people_names
         ]
     )
+
+    data_dict = [{"points": points, "edges": edges, "label": label} for points, edges, label in raw_dataset]
+    return monai.data.CacheDataset(data=data_dict, cache_rate=1.0, transform=transforms, num_workers=num_workers)

@@ -3,56 +3,88 @@ from pathlib import Path
 
 import numpy as np
 import pytorch_lightning as pl
-
 import torch
 import torch.cuda
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
-from torch.nn import CrossEntropyLoss
 import torchmetrics
-from torchvision import transforms
+from monai.transforms import Compose
+from torch.nn import CrossEntropyLoss
 
-from src.dataset.dataset import make_dataset
+from src.dataset.ck_dataset import make_dataset
+from src.dataset.dataloader import TransformsDataLoader
+from src.dataset.dl_transforms import InterpolateGraphs
+from src.dataset.transforms import (
+    ComputeHKSFeaturesd,
+    GraphToPyGData,
+    NormalizePointcloudd,
+    RandomNormalOffsetd,
+    RandomRotationd,
+)
 from src.models.dgcnn import DGCNN
-from src.models.pointnet import PointNet
-from src.dataset.transforms import NormalRandomOffsetTransform, RandomRotation
+from src.models.feast_gcn import FeastGCN
+from src.models.sage_gcn import SAGEGCN
 
 
 class Classifier(pl.LightningModule):
-    def __init__(self, dataset_path: Path, bs: int, lr: float, num_classes: int):
+    def __init__(
+        self,
+        dataset_path: Path,
+        model_name: str,
+        features: str,
+        bs: int,
+        lr: float,
+        num_classes: int,
+    ):
         super().__init__()
 
         self.save_hyperparameters()
 
+        self.features = features
         self.dataset_path = dataset_path
         self.bs = bs
         self.lr = lr
         self.num_classes = num_classes
 
+        # Define loss and metrics
         self.loss = CrossEntropyLoss()
         self.acc = torchmetrics.Accuracy(num_classes=num_classes, average="macro")
-        self.f1_score = torchmetrics.F1Score(
-            num_classes=num_classes, average="macro"
-        )
+        self.f1_score = torchmetrics.F1Score(num_classes=num_classes, average="macro")
 
-        self.model = DGCNN(
-            channels=[3, 64, 128, 256],
-            head_channels=[256, 128],
-            num_classes=num_classes,
-            k=20
-        )
-        # self.model = PointNet(
-        #     dim=3,
-        #     channels=(8, 16, 32, 64, 128, 256),
-        #     tnets=(True, True, False, False, False),
-        #     classes=num_classes,
-        #     stride=1,
-        #     main_kernel_size=1,
-        #     branch_kernel_sizes=(1, 3)
-        # )
+        # Define features
+        in_channels = 3 if self.features == "xyz" else 16
 
-    def forward(self, x):
-        return self.model(x)
+        # Define model
+        if model_name == "dgcnn":
+            self.model = DGCNN(
+                blocks_mlp=[[2 * in_channels, 64, 64, 64], [2 * 64, 64, 128]],
+                aggr_mlp=[128 + 64, 256],
+                head_mlp=[256, 128, num_classes],
+            )
+
+        elif model_name == "feast":
+            self.model = FeastGCN(
+                block_channels=[[in_channels, 16, 32, 64], [64, 64, 64, 128]],
+                aggr_channels=[128 + 64, 256],
+                head_channels=[256, 128, num_classes],
+            )
+
+        elif model_name == "sage":
+            self.model = SAGEGCN(
+                block_channels=[[in_channels, 16, 32, 64], [64, 64, 64, 128]],
+                aggr_channels=[128 + 64, 256],
+                head_channels=[256, 128, num_classes],
+            )
+
+        else:
+            raise NotImplementedError(
+                f"Model '{model_name}' is not implemented. Choose from: ['dgcnn', 'feast', 'sage']."
+            )
+
+    def forward(self, data):
+        x = data.pos if self.features == "xyz" else data.x
+        edge_index, batch = data.edge_index, data.batch
+
+        return self.model(x, edge_index, batch)
 
     def remap_labels(self, labels):
         uniques = np.unique(labels)
@@ -63,64 +95,77 @@ class Classifier(pl.LightningModule):
         return labels
 
     def prepare_data(self):
+
         with Path("split.json").open() as file:
             split_dict = json.load(file)
 
         self.train_ds = make_dataset(
             root_path=self.dataset_path,
             people_names=split_dict["train"],
-            transforms=transforms.Compose([
-                NormalRandomOffsetTransform(0.005),
-                RandomRotation([np.pi / 6, np.pi / 6, np.pi / 6])
-            ])
+            transforms=Compose(
+                [
+                    NormalizePointcloudd(["points"]),
+                    ComputeHKSFeaturesd(["points"], "hks", 128, 16),
+                    RandomNormalOffsetd(["points"], 0.005),
+                    RandomRotationd(["points"], [np.pi / 6, np.pi / 6, np.pi / 6]),
+                    GraphToPyGData(x="hks"),
+                ]
+            ),
         )
-        self.val_ds = make_dataset(root_path=self.dataset_path, people_names=split_dict["val"])
+
+        self.val_ds = make_dataset(
+            root_path=self.dataset_path,
+            people_names=split_dict["val"],
+            transforms=Compose(
+                [
+                    NormalizePointcloudd(["points"]),
+                    ComputeHKSFeaturesd(["points"], "hks", 128, 16),
+                    GraphToPyGData(x="hks"),
+                ]
+            ),
+        )
 
     def train_dataloader(self):
-        return DataLoader(
+        transforms = InterpolateGraphs()
+
+        return TransformsDataLoader(
             self.train_ds,
             batch_size=self.bs,
             shuffle=True,
             num_workers=8,
-            drop_last=True
+            drop_last=True,
+            transforms=transforms,
         )
 
     def val_dataloader(self):
-        return DataLoader(
+        return TransformsDataLoader(
             self.val_ds,
             batch_size=self.bs,
             shuffle=False,
             num_workers=8,
-            drop_last=True
+            drop_last=True,
         )
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.model.parameters(), self.lr)
         return optimizer
 
-    def shared_step(self, batch):
-        pointclouds, labels = batch
-        preds = self.forward(pointclouds.float())
+    def shared_step(self, batch, key):
+        preds = self.forward(batch)
 
-        loss = self.loss(preds, labels.long())
+        loss = self.loss(preds, batch.y.long())
 
-        log_preds = F.log_softmax(preds)
-        acc = self.acc(log_preds, labels.int())
-        f1_score = self.f1_score(log_preds, labels.int())
+        log_preds = F.log_softmax(preds, dim=1)
+        acc = self.acc(log_preds, batch.y.int())
+        f1_score = self.f1_score(log_preds, batch.y.int())
 
-        return loss, acc, f1_score
-
-    def training_step(self, batch, batch_idx):
-        loss, acc, f1_score = self.shared_step(batch)
-        self.log("train_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-        self.log("train_acc", acc, on_epoch=True, prog_bar=False, logger=True)
-        self.log("train_f1_score", f1_score, on_epoch=True, prog_bar=False, logger=True)
+        metrics = {f"{key}_loss": loss, f"{key}_acc": acc, f"{key}_f1_score": f1_score}
+        self.log_dict(metrics, on_epoch=True, on_step=False, batch_size=self.bs)
 
         return loss
 
-    def validation_step(self, batch, batch_idx):
-        loss, acc, f1_score = self.shared_step(batch)
+    def training_step(self, batch, batch_idx):
+        return self.shared_step(batch, "train")
 
-        metrics = {"val_loss": loss, "val_acc": acc, "val_f1_score": f1_score}
-        self.log_dict(metrics, on_epoch=True)
-        return metrics
+    def validation_step(self, batch, batch_idx):
+        return self.shared_step(batch, "val")
