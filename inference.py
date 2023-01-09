@@ -39,13 +39,14 @@ def inference(
 
     # Load split
     with Path("split.json").open() as file:
-        json.load(file)
+        split_dict = json.load(file)
 
     modes = ["val"]
 
     for mode in tqdm(modes):
         ds = make_dataset(
             root_path=data_path,
+            people_names=split_dict[mode],
             transforms=Compose(
                 [
                     NormalizePointcloudd(["points"]),
