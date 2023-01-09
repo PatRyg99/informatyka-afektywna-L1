@@ -23,23 +23,22 @@ app = typer.Typer()
 @app.command()
 def inference(
     data_path: Path = typer.Option("./data/CK-dataset", "-d", "--data_path"),
-    input_path: Path = typer.Option("output/feast-hks", "-i", "--in_path"),
+    # input_path: Path = typer.Option("./output/01-09-2023.16:55:41/checkpoint/last.ckpt", "-i", "--in_path"),
+    input_path: Path = typer.Option("./pretrained_models/", "-i", "--in_path"),
 ) -> Path:
 
     # Load model
-    checkpoint_path = os.path.join(input_path, "checkpoint")
-    model_path = [
-        filename for filename in os.listdir(checkpoint_path) if "last" not in filename
-    ][0]
+    model_path = os.path.join(input_path, "dgcnn.ckpt")
+    # model_path = [
+    #     filename for filename in os.listdir(checkpoint_path) if "last" not in filename
+    # ][0]
 
-    classifier = Classifier.load_from_checkpoint(
-        os.path.join(checkpoint_path, model_path)
-    ).eval()
+    classifier = Classifier.load_from_checkpoint(model_path).eval()
     classifier.cuda()
 
     # Load split
     with Path("split.json").open() as file:
-        json.load(file)
+        split = json.load(file)
 
     modes = ["val"]
 
@@ -53,6 +52,7 @@ def inference(
                     GraphToPyGData(x="hks"),
                 ]
             ),
+            people_names=split["val"]
         )
         dl = DataLoader(ds, batch_size=1, shuffle=False, num_workers=10)
         preds = []

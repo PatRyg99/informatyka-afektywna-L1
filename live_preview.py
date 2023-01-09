@@ -20,7 +20,7 @@ emotion_map: dict[int, str] = {
 
 
 def main():
-    net = Classifier.load_from_checkpoint("pretrained_models/dgcnn.ckpt").eval().cuda()
+    net = Classifier.load_from_checkpoint("output/01-09-2023.16:55:41/checkpoint/last.ckpt").eval().cuda()
     for frame in camera_frame_generator():
         process_frame(net, frame)
 
