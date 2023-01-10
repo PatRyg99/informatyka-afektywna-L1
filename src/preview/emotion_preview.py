@@ -13,6 +13,7 @@ from torch_geometric.utils import to_undirected
 
 from run.export_meshes import face_to_mesh, NoFacesFoundException
 from src.classifier import Classifier
+from src.dataset.transforms import NormalizePointcloudd
 
 
 class EmotionPreview:
@@ -40,6 +41,7 @@ class EmotionPreview:
         self.target_resolution = (640, 360)
 
         self.net = Classifier.load_from_checkpoint(model_path).eval().cuda()
+        self.transforms = NormalizePointcloudd(["points"])
 
         self.root = Tk()
         self.app = Frame(self.root)
@@ -115,11 +117,16 @@ class EmotionPreview:
             return
 
         # predicting emotion from model
-        points: torch.Tensor = torch.from_numpy(face_mesh.points).cuda()
+        points: torch.Tensor = torch.from_numpy(face_mesh.points).float().cuda()
         edges: torch.Tensor = torch.from_numpy(face_mesh.lines.reshape(-1, 3)[:, 1:]).cuda()
         edge_index = to_undirected(edges.T.long())
 
-        data = Data(pos=points.float(), edge_index=edge_index)
+        data_dict = {
+            "points": points,
+            "edges": edge_index
+        }
+        data_dict = self.transforms(data_dict)
+        data = Data(pos=data_dict["points"], edge_index=data_dict["edges"])
         with torch.no_grad():
             pred = self.net(data)
             pred = torch.sigmoid(pred[0]).cpu()
