@@ -24,7 +24,7 @@ def train(
 
     # Init out directory
     ct = datetime.datetime.now().strftime("%m-%d-%Y.%H:%M:%S")
-    logs_path = os.path.join(out_path, ct, "logs")
+    logs_path = os.path.join(out_path, ct, "../logs")
     checkpoint_path = os.path.join(out_path, ct, "checkpoint")
 
     # Init the LightningModule

@@ -24,7 +24,7 @@ app = typer.Typer()
 def inference(
     data_path: Path = typer.Option("./data/CK-dataset", "-d", "--data_path"),
     input_path: Path = typer.Option("./pretrained_models/", "-i", "--in_path"),
-    filename: str = typer.Option("dgcnn_but_it_works.ckpt", "-f", "--in_path"),
+    filename: str = typer.Option("dgcnn.ckpt", "-f", "--in_path"),
 ) -> Path:
 
     # Load model
@@ -34,7 +34,7 @@ def inference(
     classifier.cuda()
 
     # Load split
-    with Path("split.json").open() as file:
+    with Path("../split.json").open() as file:
         split = json.load(file)
 
     modes = ["val"]

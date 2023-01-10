@@ -1,19 +1,18 @@
 from abc import abstractmethod
+from datetime import datetime
+from tkinter import Tk, Frame, Label, IntVar, StringVar, Entry
+from typing import TextIO
 
+import cv2
 import numpy as np
 import torch
-import torch.nn as nn
-import typer
-from matplotlib import pyplot as plt
-from torch_geometric.utils import to_undirected
-from tkinter import Tk, Frame, Label, IntVar, Text, END, StringVar, Entry
 from PIL import ImageTk, Image
-import cv2
-
-from src.classifier import Classifier
-from export_meshes import face_to_mesh, NoFacesFoundException
+from matplotlib import pyplot as plt
 from torch_geometric.data import Data
-from simple_twitch_stream_receiver import SimpleTwitchStreamReceiver
+from torch_geometric.utils import to_undirected
+
+from run.export_meshes import face_to_mesh, NoFacesFoundException
+from src.classifier import Classifier
 
 
 class EmotionPreview:
@@ -28,7 +27,16 @@ class EmotionPreview:
         7: "surprise",
     }
 
-    def __init__(self, model_path: str):
+    def __init__(
+        self,
+        model_path: str,
+        log_file: TextIO,
+        default_left: int = 0,
+        default_right: int = 450,
+        default_top: int = 750,
+        default_bottom: int = 1080
+    ):
+        self.log_file = log_file
         self.target_resolution = (640, 360)
 
         self.net = Classifier.load_from_checkpoint(model_path).eval().cuda()
@@ -42,10 +50,10 @@ class EmotionPreview:
         self.images_frame = Frame(self.app)
         self.images_frame.grid(column=1, row=0)
 
-        self.left_input_var = IntVar(self.inputs_frame, value=0)
-        self.right_input_var = IntVar(self.inputs_frame, value=450)
-        self.top_input_var = IntVar(self.inputs_frame, value=750)
-        self.bottom_input_var = IntVar(self.inputs_frame, value=1080)
+        self.left_input_var = IntVar(self.inputs_frame, value=default_left)
+        self.right_input_var = IntVar(self.inputs_frame, value=default_right)
+        self.top_input_var = IntVar(self.inputs_frame, value=default_top)
+        self.bottom_input_var = IntVar(self.inputs_frame, value=default_bottom)
         self.output_var = StringVar(self.inputs_frame, value="No predictions made yet")
 
         Label(self.inputs_frame, text="left_margin").grid(column=0, row=0)
@@ -60,7 +68,7 @@ class EmotionPreview:
         Label(self.inputs_frame, text="bottom_margin").grid(column=0, row=3)
         Entry(self.inputs_frame, textvariable=self.bottom_input_var).grid(column=1, row=3)
 
-        Label(self.inputs_frame, textvariable=self.output_var).grid(column=0, row=4)
+        Label(self.inputs_frame, width=22, textvariable=self.output_var).grid(column=0, row=4)
 
         num_displayed_images = 4
         self.tk_image_frames = [Label(self.images_frame) for _ in range(num_displayed_images)]
@@ -112,14 +120,18 @@ class EmotionPreview:
         edge_index = to_undirected(edges.T.long())
 
         data = Data(pos=points.float(), edge_index=edge_index)
-        pred = self.net(data)
-        pred = torch.sigmoid(pred[0]).cpu()
+        with torch.no_grad():
+            pred = self.net(data)
+            pred = torch.sigmoid(pred[0]).cpu()
 
         predicted_class = torch.argmax(pred)
         predicted_label = self.emotion_map[predicted_class.item()]
         self.output_var.set(f"predicted: {predicted_label}")
 
-        # drawimg emotions histogram
+        # logging results to file
+        self.log_file.write(",".join([datetime.now().strftime("%Y-%m-%d %S:%M:%S.%f"), *map(str, pred.tolist())]) + "\n")
+
+        # drawing emotions histogram
         fig = plt.figure()
         xs = list(range(len(self.emotion_map)))
         ys = pred.tolist()
@@ -143,34 +155,3 @@ class EmotionPreview:
     @abstractmethod
     def frame_generator(self):
         pass
-
-
-class TwitchEmotionPreview(EmotionPreview):
-    def __init__(self, url: str, model_path: str):
-        super().__init__(model_path)
-        self.receiver = SimpleTwitchStreamReceiver(url, quality="best")
-
-    def frame_generator(self):
-        yield from self.receiver
-
-
-class LiveEmotionPreview(EmotionPreview):
-    def frame_generator(self):
-        cap = cv2.VideoCapture(0)
-        if not cap.isOpened():
-            print("Cannot open camera")
-            return
-        while True:
-            # Capture frame-by-frame
-            ret, frame = cap.read()
-            # if frame is read correctly ret is True
-            if not ret:
-                print("Can't receive frame (stream end?). Exiting ...")
-                break
-            # Our operations on the frame come here
-            if cv2.waitKey(1) == ord('q'):
-                break
-            yield frame
-        # When everything done, release the capture
-        cap.release()
-        cv2.destroyAllWindows()
