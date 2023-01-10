@@ -13,7 +13,7 @@ def twitch(
     url: str = typer.Option("https://www.twitch.tv/grandpoobear", "-u", "--url"),
     model_path: str = typer.Option("./pretrained_models/dgcnn.ckpt", "-m", "--model"),
 ) -> None:
-    log_path = Path("../logs") / f"{url.split('/')[-1]}.csv"
+    log_path = Path("logs") / f"{url.split('/')[-1]}.csv"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with open(log_path, mode="a") as log_file:
         preview = TwitchEmotionPreview(url, model_path, log_file=log_file)
@@ -24,7 +24,7 @@ def twitch(
 def camera(
     model_path: str = typer.Option("./pretrained_models/dgcnn.ckpt", "-m", "--model"),
 ) -> None:
-    log_path = Path("../logs") / "camera.csv"
+    log_path = Path("logs") / "camera.csv"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with open(log_path, mode="a") as log_file:
         preview = CameraEmotionPreview(model_path, log_file=log_file)
