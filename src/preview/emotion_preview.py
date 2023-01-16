@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from datetime import datetime
-from tkinter import Tk, Frame, Label, IntVar, StringVar, Entry
+from tkinter import Tk, Frame, Label, IntVar, StringVar, Entry, BooleanVar, Checkbutton
 from typing import TextIO
 
 import cv2
@@ -56,6 +56,7 @@ class EmotionPreview:
         self.right_input_var = IntVar(self.inputs_frame, value=default_right)
         self.top_input_var = IntVar(self.inputs_frame, value=default_top)
         self.bottom_input_var = IntVar(self.inputs_frame, value=default_bottom)
+        self.show_preview_var = BooleanVar(self.inputs_frame, value=True)
         self.output_var = StringVar(self.inputs_frame, value="No predictions made yet")
 
         Label(self.inputs_frame, text="left_margin").grid(column=0, row=0)
@@ -70,7 +71,8 @@ class EmotionPreview:
         Label(self.inputs_frame, text="bottom_margin").grid(column=0, row=3)
         Entry(self.inputs_frame, textvariable=self.bottom_input_var).grid(column=1, row=3)
 
-        Label(self.inputs_frame, width=22, textvariable=self.output_var).grid(column=0, row=4)
+        Checkbutton(self.inputs_frame, variable=self.show_preview_var, text="Show preview:").grid(column=0, row=4)
+        Label(self.inputs_frame, width=22, textvariable=self.output_var).grid(column=0, row=5)
 
         num_displayed_images = 4
         self.tk_image_frames = [Label(self.images_frame) for _ in range(num_displayed_images)]
@@ -136,7 +138,7 @@ class EmotionPreview:
         self.output_var.set(f"predicted: {predicted_label}")
 
         # logging results to file
-        self.log_file.write(",".join([datetime.now().strftime("%Y-%m-%d %S:%M:%S.%f"), *map(str, pred.tolist())]) + "\n")
+        self.log_file.write(",".join([datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"), *map(str, pred.tolist())]) + "\n")
 
         # drawing emotions histogram
         fig = plt.figure()
@@ -148,16 +150,20 @@ class EmotionPreview:
         plot_array = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
         plot_array = plot_array.reshape(fig.canvas.get_width_height()[::-1] + (3,))
         self.display_image(plot_array, 2)
+        fig.clear()
+        del fig
+        plt.close()
 
         self.app.after(1, self.update_stream)
 
     def display_image(self, frame: np.ndarray, image_index: int):
-        pill_frame = Image.fromarray(frame)
-        pill_frame = pill_frame.resize(self.target_resolution)
-        tk_frame = ImageTk.PhotoImage(image=pill_frame)
+        if self.show_preview_var.get():
+            pill_frame = Image.fromarray(frame)
+            pill_frame = pill_frame.resize(self.target_resolution)
+            tk_frame = ImageTk.PhotoImage(image=pill_frame)
 
-        self.tk_image_frames[image_index].imgtk = tk_frame
-        self.tk_image_frames[image_index].configure(image=tk_frame)
+            self.tk_image_frames[image_index].imgtk = tk_frame
+            self.tk_image_frames[image_index].configure(image=tk_frame)
 
     @abstractmethod
     def frame_generator(self):
