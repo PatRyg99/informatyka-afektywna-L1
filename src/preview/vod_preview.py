@@ -6,8 +6,8 @@ from src.preview.emotion_preview import EmotionPreview
 
 
 class VODEmotionPreview(EmotionPreview):
-    def __init__(self, model_path: str, log_file: TextIO, vod_path: str, skip_first_n: int, read_interval: int):
-        super().__init__(model_path, log_file=log_file, default_left=0, default_right=-1, default_top=0, default_bottom=-1)
+    def __init__(self, model_path: str, log_file: TextIO, vod_path: str, skip_first_n: int, read_interval: int, default_left=0, default_right=-1, default_top=0, default_bottom=-1):
+        super().__init__(model_path, log_file=log_file, default_left=default_left, default_right=default_right, default_top=default_top, default_bottom=default_bottom)
         self.vod_path = vod_path
         self.skip_first_n = skip_first_n
         self.read_interval = read_interval

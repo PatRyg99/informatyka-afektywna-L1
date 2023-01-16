@@ -42,7 +42,10 @@ def vod(
     log_path = (Path("logs") / Path(vod_path).stem).with_suffix(".csv")
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with open(log_path, mode="a") as log_file:
-        preview = VODEmotionPreview(model_path, log_file=log_file, vod_path=vod_path, skip_first_n=skip_first_n, read_interval=read_interval)
+        preview = VODEmotionPreview(
+            model_path, log_file=log_file, vod_path=vod_path, skip_first_n=skip_first_n, read_interval=read_interval,
+            default_left=950, default_right=1280, default_top=450, default_bottom=650
+        )
         preview.run_gui()
 
 
