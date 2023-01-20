@@ -16,7 +16,7 @@
             "name": "Export meshes",
             "type": "python",
             "request": "launch",
-            "module": "export_meshes",
+            "module": "run.export_meshes",
             "justMyCode": false,
             "cwd": "${workspaceFolder}",
             "presentation": {
@@ -29,7 +29,7 @@
             "name": "Train",
             "type": "python",
             "request": "launch",
-            "module": "train",
+            "module": "run.train",
             "args": [
                 "--model-name",
                 "dgcnn",
@@ -48,7 +48,7 @@
             "name": "Inference",
             "type": "python",
             "request": "launch",
-            "module": "inference",
+            "module": "run.inference",
             "justMyCode": false,
             "cwd": "${workspaceFolder}",
             "presentation": {

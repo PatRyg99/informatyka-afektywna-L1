@@ -45,7 +45,6 @@ def face_to_mesh(face_img: np.ndarray) -> Tuple[pv.PolyData, np.ndarray]:
     ) as face_mesh:
         results = face_mesh.process(cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB))
         if not results.multi_face_landmarks:
-            print("no detection!")
             raise NoFacesFoundException()
         [face_landmarks] = results.multi_face_landmarks
     preview: np.ndarray = generate_preview(landmarks=face_landmarks, face_img=face_img)

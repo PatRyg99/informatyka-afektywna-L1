@@ -52,15 +52,14 @@ def inference(
     classifier.cuda()
 
     # Load split
-    with Path("split.json").open() as file:
-        split_dict = json.load(file)
+    with Path("../split.json").open() as file:
+        split = json.load(file)
 
     modes = ["val"]
 
     for mode in tqdm(modes):
         ds = make_dataset(
             root_path=data_path,
-            people_names=split_dict[mode],
             transforms=Compose(
                 [
                     NormalizePointcloudd(["points"]),
@@ -68,6 +67,7 @@ def inference(
                     GraphToPyGData(x_key="hks"),
                 ]
             ),
+            people_names=split[mode],
         )
         dl = DataLoader(ds, batch_size=1, shuffle=False, num_workers=10)
 
