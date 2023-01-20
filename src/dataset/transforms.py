@@ -59,19 +59,33 @@ class LoadSampled(MapTransform):
 class GraphToPyGData:
     """Convert graph to pytorch geometric data object"""
 
-    def __init__(self, x: str) -> None:
-        self.x = x
+    def __init__(self, x_key: str = None) -> None:
+        self.x_key = x_key
 
     def __call__(self, data):
-        x, pos, edge_index, y = (
-            data[self.x],
-            data["points"],
-            data["edges"],
-            data["label"],
-        )
 
-        edge_index = to_undirected(edge_index.T.long())
-        pyg_data = Data(y=y.long(), x=x.float(), pos=pos.float(), edge_index=edge_index)
+        if self.x_key is None:
+            pos, edge_index, y = (
+                data["points"],
+                data["edges"],
+                data["label"],
+            )
+
+            edge_index = to_undirected(edge_index.T.long())
+            pyg_data = Data(y=y.long(), pos=pos.float(), edge_index=edge_index)
+
+        else:
+            x, pos, edge_index, y = (
+                data[self.x_key],
+                data["points"],
+                data["edges"],
+                data["label"],
+            )
+
+            edge_index = to_undirected(edge_index.T.long())
+            pyg_data = Data(
+                y=y.long(), x=x.float(), pos=pos.float(), edge_index=edge_index
+            )
 
         return pyg_data
 

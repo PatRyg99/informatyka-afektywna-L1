@@ -22,7 +22,9 @@ class DGCNN(nn.Module):
         self.aggr_mlp = nn.Linear(*aggr_mlp)
         self.head_mlp = MLP(head_mlp, dropout=0.5)
 
-    def forward(self, pos, edge_index, batch):
+    def extract_features(
+        self, pos: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor
+    ):
 
         # Iterate over blocks and collect interim results
         xs = [pos]
@@ -34,5 +36,10 @@ class DGCNN(nn.Module):
         out = self.aggr_mlp(torch.cat(xs[1:], dim=1))
         out = global_max_pool(out, batch)
 
-        # Run through head to obtain classification results
-        return self.head_mlp(out)
+        return out
+
+    def classify(self, features: torch.Tensor):
+        return self.head_mlp(features)
+
+    def forward(self, pos: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor):
+        return self.classify(self.extract_features(pos, edge_index, batch))

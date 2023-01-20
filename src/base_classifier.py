@@ -1,45 +1,33 @@
-import json
 from pathlib import Path
 
-import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.cuda
 import torch.nn.functional as F
 import torchmetrics
-from monai.transforms import Compose
 from torch.nn import CrossEntropyLoss
 
-from src.dataset.ck_dataset import make_dataset
 from src.dataset.dataloader import TransformsDataLoader
 from src.dataset.dl_transforms import InterpolateGraphs
-from src.dataset.transforms import (
-    ComputeHKSFeaturesd,
-    GraphToPyGData,
-    NormalizePointcloudd,
-    RandomNormalOffsetd,
-    RandomRotationd,
-)
 from src.models.dgcnn import DGCNN
 from src.models.feast_gcn import FeastGCN
 from src.models.sage_gcn import SAGEGCN
 
 
-class Classifier(pl.LightningModule):
+class BaseClassifier(pl.LightningModule):
     def __init__(
         self,
         dataset_path: Path,
         model_name: str,
-        features: str,
         bs: int,
         lr: float,
         num_classes: int,
+        in_channels: int,
     ):
         super().__init__()
 
         self.save_hyperparameters()
 
-        self.features = features
         self.dataset_path = dataset_path
         self.bs = bs
         self.lr = lr
@@ -49,9 +37,6 @@ class Classifier(pl.LightningModule):
         self.loss = CrossEntropyLoss()
         self.acc = torchmetrics.Accuracy(num_classes=num_classes, average="macro")
         self.f1_score = torchmetrics.F1Score(num_classes=num_classes, average="macro")
-
-        # Define features
-        in_channels = 3 if self.features == "xyz" else 16
 
         # Define model
         if model_name == "dgcnn":
@@ -81,49 +66,10 @@ class Classifier(pl.LightningModule):
             )
 
     def forward(self, data):
-        x = data.pos if self.features == "xyz" else data.x
-        edge_index, batch = data.edge_index, data.batch
-
-        return self.model(x, edge_index, batch)
-
-    def remap_labels(self, labels):
-        uniques = np.unique(labels)
-
-        for unique in uniques:
-            labels[labels == unique] = np.argwhere(uniques == unique).flatten()
-
-        return labels
+        raise NotImplementedError()
 
     def prepare_data(self):
-
-        with Path("split.json").open() as file:
-            split_dict = json.load(file)
-
-        self.train_ds = make_dataset(
-            root_path=self.dataset_path,
-            people_names=split_dict["train"],
-            transforms=Compose(
-                [
-                    NormalizePointcloudd(["points"]),
-                    ComputeHKSFeaturesd(["points"], "hks", 128, 16),
-                    RandomNormalOffsetd(["points"], 0.005),
-                    RandomRotationd(["points"], [np.pi / 6, np.pi / 6, np.pi / 6]),
-                    GraphToPyGData(x="hks"),
-                ]
-            ),
-        )
-
-        self.val_ds = make_dataset(
-            root_path=self.dataset_path,
-            people_names=split_dict["val"],
-            transforms=Compose(
-                [
-                    NormalizePointcloudd(["points"]),
-                    ComputeHKSFeaturesd(["points"], "hks", 128, 16),
-                    GraphToPyGData(x="hks"),
-                ]
-            ),
-        )
+        raise NotImplementedError()
 
     def train_dataloader(self):
         transforms = InterpolateGraphs()
@@ -151,7 +97,7 @@ class Classifier(pl.LightningModule):
         return optimizer
 
     def shared_step(self, batch, key):
-        preds = self.forward(batch)
+        _, preds = self.forward(batch)
 
         loss = self.loss(preds, batch.y.long())
 
@@ -160,7 +106,9 @@ class Classifier(pl.LightningModule):
         f1_score = self.f1_score(log_preds, batch.y.int())
 
         metrics = {f"{key}_loss": loss, f"{key}_acc": acc, f"{key}_f1_score": f1_score}
-        self.log_dict(metrics, on_epoch=True, on_step=False, batch_size=self.bs)
+        self.log_dict(
+            metrics, on_epoch=True, on_step=False, prog_bar=True, batch_size=self.bs
+        )
 
         return loss
 

@@ -4,8 +4,8 @@ import torch
 import torch.nn as nn
 from matplotlib import pyplot as plt
 
-from src.classifier import Classifier
-from export_meshes import face_to_mesh, NoFacesFoundException
+from base_classifier import Classifier
+from export_meshes import NoFacesFoundException, face_to_mesh
 
 emotion_map: dict[int, str] = {
     0: "neutral",
@@ -30,17 +30,21 @@ def process_frame(net: nn.Module, frame: np.ndarray):
         face_mesh, preview = face_to_mesh(face_img=frame)
     except NoFacesFoundException:
         frame = write_on_image(frame, "no faces found")
-        cv2.imshow('face_landmarks', frame)
+        cv2.imshow("face_landmarks", frame)
         return
 
     face_points = face_mesh.points
-    face_points = (face_points - face_points.min()) / (face_points.max() - face_points.min()) - 0.5
-    vertices: torch.Tensor = torch.from_numpy(face_points).to(dtype=torch.float32)[None, ...].cuda()
+    face_points = (face_points - face_points.min()) / (
+        face_points.max() - face_points.min()
+    ) - 0.5
+    vertices: torch.Tensor = torch.from_numpy(face_points).to(dtype=torch.float32)[
+        None, ...
+    ].cuda()
     pred = torch.sigmoid(net(vertices)[0]).cpu()
     predicted_class = torch.argmax(pred)
     predicted_label = emotion_map[predicted_class.item()]
     preview = write_on_image(preview, predicted_label)
-    cv2.imshow('face_landmarks', preview)
+    cv2.imshow("face_landmarks", preview)
 
     fig = plt.figure()
     xs = list(range(len(emotion_map)))
@@ -48,12 +52,9 @@ def process_frame(net: nn.Module, frame: np.ndarray):
     label = list(emotion_map.values())
     plt.bar(xs, ys, tick_label=label)
     fig.canvas.draw()
-    plot_array = np.fromstring(
-        fig.canvas.tostring_rgb(), dtype=np.uint8,
-        sep=''
-    )
+    plot_array = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep="")
     plot_array = plot_array.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-    cv2.imshow('probs', plot_array)
+    cv2.imshow("probs", plot_array)
     plt.cla()
 
 
@@ -64,7 +65,16 @@ def write_on_image(img, text: str):
     fontColor = (255, 255, 255)
     thickness = 1
     lineType = 2
-    img = cv2.putText(img, text, bottomLeftCornerOfText, font, fontScale, fontColor, thickness, lineType)
+    img = cv2.putText(
+        img,
+        text,
+        bottomLeftCornerOfText,
+        font,
+        fontScale,
+        fontColor,
+        thickness,
+        lineType,
+    )
     return img
 
 
@@ -82,7 +92,7 @@ def camera_frame_generator():
             break
         # Our operations on the frame come here
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        if cv2.waitKey(1) == ord('q'):
+        if cv2.waitKey(1) == ord("q"):
             break
         yield frame
     # When everything done, release the capture

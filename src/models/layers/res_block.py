@@ -1,23 +1,20 @@
-
-
 import torch
 import torch_geometric
 from torch.utils.checkpoint import checkpoint
 
 
 class ResBlock(torch.nn.Module):
-
     def __init__(self, convolution, in_channels, out_channels, **kwargs):
         super(ResBlock, self).__init__()
 
-        if 'batch_norm' in kwargs:
-            if not kwargs.pop('batch_norm'):
+        if "batch_norm" in kwargs:
+            if not kwargs.pop("batch_norm"):
                 self.bn1 = torch.nn.Identity()
         else:
             self.bn1 = torch_geometric.nn.BatchNorm(out_channels)
 
-        if 'relu' in kwargs:
-            if not kwargs.pop('relu'):
+        if "relu" in kwargs:
+            if not kwargs.pop("relu"):
                 self.act = torch.nn.Identity()
         else:
             self.act = torch.relu
@@ -40,9 +37,14 @@ class ResBlock(torch.nn.Module):
     def layer(self, x, edge_index, conv):
 
         # Re-calculate the convolution on each pass
-        check = checkpoint(self.dummy_conv, conv, x, edge_index,
-                           torch.tensor(0., requires_grad=True),
-                           preserve_rng_state=False)
+        check = checkpoint(
+            self.dummy_conv,
+            conv,
+            x,
+            edge_index,
+            torch.tensor(0.0, requires_grad=True),
+            preserve_rng_state=False,
+        )
 
         return check  # without activation
 

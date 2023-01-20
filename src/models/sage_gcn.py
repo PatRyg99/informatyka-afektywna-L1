@@ -51,8 +51,9 @@ class SAGEGCN(torch.nn.Module):
         self.aggr_mlp = nn.Linear(*aggr_channels)
         self.head_mlp = MLP(head_channels, dropout=0.5)
 
-    def forward(self, x, edge_index, batch):
-
+    def extract_features(
+        self, x: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor
+    ):
         xs = [x]
 
         for block in self.blocks:
@@ -62,4 +63,10 @@ class SAGEGCN(torch.nn.Module):
         out = self.aggr_mlp(torch.cat(xs[1:], dim=1))
         out = global_max_pool(out, batch)
 
-        return self.head_mlp(out)
+        return out
+
+    def classify(self, features: torch.Tensor):
+        return self.head_mlp(features)
+
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor):
+        return self.classify(self.extract_features(x, edge_index, batch))
