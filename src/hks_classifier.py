@@ -50,7 +50,7 @@ class HKSClassifier(BaseClassifier):
                     NormalizePointcloudd(["points"]),
                     ComputeHKSFeaturesd(["points"], "hks", 128, self.in_channels),
                     RandomNormalOffsetd(["points"], 0.005),
-                    RandomRotationd(["points"], [np.pi / 6, np.pi / 6, np.pi / 6]),
+                    RandomRotationd(["points"], [2 * np.pi, 2 * np.pi, 2 * np.pi]),
                     GraphToPyGData(x_key="hks"),
                 ]
             ),

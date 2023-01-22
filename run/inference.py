@@ -25,7 +25,7 @@ app = typer.Typer()
 @app.command()
 def inference(
     data_path: Path = typer.Option("./data/CK-dataset", "-d", "--data_path"),
-    input_path: Path = typer.Option("output/dgcnn-xyz", "-i", "--in_path"),
+    input_path: Path = typer.Option("output/dgcnn-xyz-rot", "-i", "--in_path"),
     features: str = typer.Option("xyz", "-f", "--features"),
 ) -> Path:
 
@@ -52,7 +52,7 @@ def inference(
     classifier.cuda()
 
     # Load split
-    with Path("../split.json").open() as file:
+    with Path("split.json").open() as file:
         split = json.load(file)
 
     modes = ["val"]
@@ -63,6 +63,7 @@ def inference(
             transforms=Compose(
                 [
                     NormalizePointcloudd(["points"]),
+                    # RandomRotationd(["points"], [2 * np.pi, 2 * np.pi, 2 * np.pi]),
                     ComputeHKSFeaturesd(["points"], "hks", 128, 16),
                     GraphToPyGData(x_key="hks"),
                 ]

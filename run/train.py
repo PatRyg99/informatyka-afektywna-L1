@@ -24,7 +24,7 @@ def train(
 ) -> Path:
 
     # Init out directory
-    model_dir = f"{model_name}-{features}"
+    model_dir = f"{model_name}-{features}-rot"
     logs_path = os.path.join(out_path, model_dir, "logs")
     checkpoint_path = os.path.join(out_path, model_dir, "checkpoint")
 

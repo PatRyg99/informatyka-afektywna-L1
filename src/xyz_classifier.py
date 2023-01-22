@@ -47,7 +47,7 @@ class XYZClassifier(BaseClassifier):
                 [
                     NormalizePointcloudd(["points"]),
                     RandomNormalOffsetd(["points"], 0.005),
-                    RandomRotationd(["points"], [np.pi / 6, np.pi / 6, np.pi / 6]),
+                    RandomRotationd(["points"], [2 * np.pi, 2 * np.pi, 2 * np.pi]),
                     GraphToPyGData(),
                 ]
             ),
