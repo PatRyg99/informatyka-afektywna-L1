@@ -80,7 +80,7 @@ def plot_representation_projection(
         if i == 0:
 
             def f(m, c):
-                plt.plot([], [], marker=m, color=c, ls="none")[0]
+                return plt.plot([], [], marker=m, color=c, ls="none")[0]
 
             handles = [f("s", color) for color in cmap.colors]
             handles += [f(marker, "k") for marker in markers]

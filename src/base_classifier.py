@@ -97,7 +97,7 @@ class BaseClassifier(pl.LightningModule):
         return optimizer
 
     def shared_step(self, batch, key):
-        _, preds = self.forward(batch)
+        _, _, preds = self.forward(batch)
 
         loss = self.loss(preds, batch.y.long())
 

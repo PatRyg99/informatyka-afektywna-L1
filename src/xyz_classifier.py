@@ -7,6 +7,7 @@ from monai.transforms import Compose
 from src.base_classifier import BaseClassifier
 from src.dataset.ck_dataset import make_dataset
 from src.dataset.transforms import (
+    ComputeNormalsd,
     GraphToPyGData,
     NormalizePointcloudd,
     RandomNormalOffsetd,
@@ -27,13 +28,12 @@ class XYZClassifier(BaseClassifier):
         super().__init__(dataset_path, model_name, bs, lr, num_classes, in_channels)
 
     def forward(self, data):
-        x = data.pos
-        edge_index, batch = data.edge_index, data.batch
+        data.x = data.pos
 
-        features = self.model.extract_features(x, edge_index, batch)
+        graph_features, features = self.model.extract_features(data)
         output = self.model.classify(features)
 
-        return features, output
+        return graph_features, features, output
 
     def prepare_data(self):
 
@@ -46,6 +46,7 @@ class XYZClassifier(BaseClassifier):
             transforms=Compose(
                 [
                     NormalizePointcloudd(["points"]),
+                    ComputeNormalsd(["points"]),
                     RandomNormalOffsetd(["points"], 0.005),
                     RandomRotationd(["points"], [2 * np.pi, 2 * np.pi, 2 * np.pi]),
                     GraphToPyGData(),
@@ -56,5 +57,11 @@ class XYZClassifier(BaseClassifier):
         self.val_ds = make_dataset(
             root_path=self.dataset_path,
             people_names=split_dict["val"],
-            transforms=Compose([NormalizePointcloudd(["points"]), GraphToPyGData()]),
+            transforms=Compose(
+                [
+                    NormalizePointcloudd(["points"]),
+                    ComputeNormalsd(["points"]),
+                    GraphToPyGData(),
+                ]
+            ),
         )

@@ -8,6 +8,7 @@ from src.base_classifier import BaseClassifier
 from src.dataset.ck_dataset import make_dataset
 from src.dataset.transforms import (
     ComputeHKSFeaturesd,
+    ComputeNormalsd,
     GraphToPyGData,
     NormalizePointcloudd,
     RandomNormalOffsetd,
@@ -29,13 +30,10 @@ class HKSClassifier(BaseClassifier):
         super().__init__(dataset_path, model_name, bs, lr, num_classes, in_channels)
 
     def forward(self, data):
-        x = data.x
-        edge_index, batch = data.edge_index, data.batch
-
-        features = self.model.extract_features(x, edge_index, batch)
+        graph_features, features = self.model.extract_features(data)
         output = self.model.classify(features)
 
-        return features, output
+        return graph_features, features, output
 
     def prepare_data(self):
 
@@ -48,6 +46,7 @@ class HKSClassifier(BaseClassifier):
             transforms=Compose(
                 [
                     NormalizePointcloudd(["points"]),
+                    ComputeNormalsd(["points"]),
                     ComputeHKSFeaturesd(["points"], "hks", 128, self.in_channels),
                     RandomNormalOffsetd(["points"], 0.005),
                     RandomRotationd(["points"], [2 * np.pi, 2 * np.pi, 2 * np.pi]),
@@ -62,6 +61,7 @@ class HKSClassifier(BaseClassifier):
             transforms=Compose(
                 [
                     NormalizePointcloudd(["points"]),
+                    ComputeNormalsd(["points"]),
                     ComputeHKSFeaturesd(["points"], "hks", 128, self.in_channels),
                     GraphToPyGData(x_key="hks"),
                 ]

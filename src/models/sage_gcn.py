@@ -2,6 +2,7 @@ from typing import List
 
 import torch
 import torch.nn as nn
+from torch_geometric.data import Data
 from torch_geometric.nn import MLP, SAGEConv, global_max_pool
 
 from src.models.layers.res_block import ResBlock
@@ -51,22 +52,24 @@ class SAGEGCN(torch.nn.Module):
         self.aggr_mlp = nn.Linear(*aggr_channels)
         self.head_mlp = MLP(head_channels, dropout=0.5)
 
-    def extract_features(
-        self, x: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor
-    ):
-        xs = [x]
+    def extract_features(self, data: Data):
+
+        edge_index = data.edge_index
+        xs = [data.x]
 
         for block in self.blocks:
             x, edge_index = block(xs[-1], edge_index)
             xs.append(x)
 
-        out = self.aggr_mlp(torch.cat(xs[1:], dim=1))
-        out = global_max_pool(out, batch)
+        # Aggregate collected results
+        graph_out = self.aggr_mlp(torch.cat(xs[1:], dim=1))
+        out = global_max_pool(graph_out, data.batch)
 
-        return out
+        return graph_out, out
 
     def classify(self, features: torch.Tensor):
         return self.head_mlp(features)
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor):
-        return self.classify(self.extract_features(x, edge_index, batch))
+    def forward(self, data: Data):
+        _, global_out = self.extract_features(data)
+        return self.classify(global_out)

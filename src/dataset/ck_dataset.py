@@ -1,11 +1,12 @@
 from pathlib import Path
-from typing import List, Tuple, Callable
+from typing import Callable, List, Tuple
 
-import torch
-import torch.utils.data
 import monai
 import numpy as np
 import pyvista as pv
+import torch
+import torch.utils.data
+
 
 class SinglePersonDataset(torch.utils.data.Dataset):
     def __init__(
@@ -22,7 +23,7 @@ class SinglePersonDataset(torch.utils.data.Dataset):
         self.percentage_of_neutral_frames = percentage_of_neutral_frames
 
         self.labels_clips_path = self.root_path / "label" / self.person_name
-        self.pointclouds_clips_path = self.root_path / "pointcloud" / self.person_name
+        self.meshes_clips_path = self.root_path / "mesh" / self.person_name
         self.neutral_label_path = self.root_path / "neutral_emotion.txt"
         self.paths = self.load_paths()
 
@@ -34,30 +35,30 @@ class SinglePersonDataset(torch.utils.data.Dataset):
     def insert_additional_paths(self, label_paths: List[Path]) -> List[Tuple[Path, Path]]:
         results: List[Tuple[Path, Path]] = []
         for original_label_path in label_paths:
-            for pointcloud_path in self.get_pointclouds_paths_from_label_path(original_label_path):
-                results.append((pointcloud_path, original_label_path))
-            for neutral_pointcloud_path in self.get_neutral_pointclouds_paths_from_label_path(original_label_path):
-                results.append((neutral_pointcloud_path, self.neutral_label_path))
+            for mesh_path in self.get_meshes_paths_from_label_path(original_label_path):
+                results.append((mesh_path, original_label_path))
+            for neutral_mesh_path in self.get_neutral_meshes_paths_from_label_path(original_label_path):
+                results.append((neutral_mesh_path, self.neutral_label_path))
         return results
 
-    def get_pointclouds_paths_from_label_path(self, original_label_path: Path) -> List[Path]:
+    def get_meshes_paths_from_label_path(self, original_label_path: Path) -> List[Path]:
         clip_name = original_label_path.parent.name
         # splitting filenames that look like S005_001_00000011_emotion.txt
         label_index = int(original_label_path.stem.split("_")[2])
         min_used_image_index = int(label_index * (1 - self.percentage_of_used_frames))
         return [
-            self.pointclouds_clips_path / clip_name / f"{self.person_name}_{clip_name}_{image_index:08d}.vtk"
+            self.meshes_clips_path / clip_name / f"{self.person_name}_{clip_name}_{image_index:08d}.vtk"
             for image_index
             in range(min_used_image_index, label_index + 1)
         ]
 
-    def get_neutral_pointclouds_paths_from_label_path(self, original_label_path: Path) -> List[Path]:
+    def get_neutral_meshes_paths_from_label_path(self, original_label_path: Path) -> List[Path]:
         clip_name = original_label_path.parent.name
         # splitting filenames that look like S005_001_00000011_emotion.txt
         label_index = int(original_label_path.stem.split("_")[2])
         max_used_image_index = int(label_index * self.percentage_of_neutral_frames)
         return [
-            self.pointclouds_clips_path / clip_name / f"{self.person_name}_{clip_name}_{image_index:08d}.vtk"
+            self.meshes_clips_path / clip_name / f"{self.person_name}_{clip_name}_{image_index:08d}.vtk"
             for image_index
             in range(1, max_used_image_index + 1)
         ]
@@ -66,17 +67,18 @@ class SinglePersonDataset(torch.utils.data.Dataset):
         return len(self.paths)
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        pointcloud_path, label_path = self.paths[index]
-        return *self.load_graph(pointcloud_path), self.load_label(label_path)
+        mesh_path, label_path = self.paths[index]
+        return *self.load_graph(mesh_path), self.load_label(label_path)
 
     def load_label(self, label_path: Path) -> torch.Tensor:
         return torch.from_numpy(np.loadtxt(label_path, dtype=np.float32))
 
-    def load_graph(self, pointcloud_path: Path) -> torch.Tensor:
-        poly_data: pv.PolyData = pv.read(str(pointcloud_path))
+    def load_graph(self, mesh_path: Path) -> torch.Tensor:
+        poly_data: pv.PolyData = pv.read(str(mesh_path))
         points: torch.Tensor = torch.from_numpy(poly_data.points)
         edges: torch.Tensor = torch.from_numpy(poly_data.lines.reshape(-1, 3)[:, 1:])
-        return points, edges
+        faces: torch.Tensor = torch.from_numpy(poly_data.faces.reshape(-1, 4)[:, 1:])
+        return points, edges, faces
 
 
 def make_dataset(
@@ -93,5 +95,8 @@ def make_dataset(
         ]
     )
 
-    data_dict = [{"points": points, "edges": edges, "label": label} for points, edges, label in raw_dataset]
+    data_dict = [
+        {"points": points, "edges": edges, "faces": faces, "label": label}
+        for points, edges, faces, label in raw_dataset
+    ]
     return monai.data.CacheDataset(data=data_dict, cache_rate=1.0, transform=transforms, num_workers=num_workers)

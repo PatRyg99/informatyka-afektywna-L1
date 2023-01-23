@@ -9,6 +9,7 @@ import robust_laplacian
 import scipy
 import scipy.sparse.linalg as sla
 import torch
+import trimesh
 from monai.config import KeysCollection
 from monai.transforms.transform import MapTransform, Randomizable
 from torch_geometric.data import Data
@@ -65,29 +66,60 @@ class GraphToPyGData:
     def __call__(self, data):
 
         if self.x_key is None:
-            pos, edge_index, y = (
+            pos, edge_index, faces, normals, y = (
                 data["points"],
                 data["edges"],
-                data["label"],
-            )
-
-            edge_index = to_undirected(edge_index.T.long())
-            pyg_data = Data(y=y.long(), pos=pos.float(), edge_index=edge_index)
-
-        else:
-            x, pos, edge_index, y = (
-                data[self.x_key],
-                data["points"],
-                data["edges"],
+                data["faces"],
+                data["normals"],
                 data["label"],
             )
 
             edge_index = to_undirected(edge_index.T.long())
             pyg_data = Data(
-                y=y.long(), x=x.float(), pos=pos.float(), edge_index=edge_index
+                y=y.long(),
+                pos=pos.float(),
+                face=faces,
+                edge_index=edge_index,
+                normal=normals,
+            )
+
+        else:
+            x, pos, edge_index, faces, normals, y = (
+                data[self.x_key],
+                data["points"],
+                data["edges"],
+                data["faces"],
+                data["normals"],
+                data["label"],
+            )
+
+            edge_index = to_undirected(edge_index.T.long())
+            pyg_data = Data(
+                y=y.long(),
+                x=x.float(),
+                pos=pos.float(),
+                face=faces,
+                edge_index=edge_index,
+                normal=normals,
             )
 
         return pyg_data
+
+
+class ComputeNormalsd(MapTransform):
+    """
+    Computes normals for mesh faces
+    """
+
+    def __call__(self, data):
+        d = dict(data)
+
+        mesh = trimesh.Trimesh(vertices=d["points"], faces=d["faces"], process=False)
+
+        d["normals"] = torch.tensor(mesh.vertex_normals.copy())
+        d["edge_index"] = torch.tensor(mesh.edges.T.copy())
+
+        return d
 
 
 class ComputeHKSFeaturesd(MapTransform):
