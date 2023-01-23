@@ -26,6 +26,19 @@
             },
         },
         {
+            "name": "Extract cams",
+            "type": "python",
+            "request": "launch",
+            "module": "run.extract_cams",
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}",
+            "presentation": {
+                "hidden": false,
+                "group": "1. Data",
+                "order": 0
+            },
+        },
+        {
             "name": "Train",
             "type": "python",
             "request": "launch",
